@@ -1,250 +1,170 @@
-import React, { useEffect, useState } from "react";
+import { useState } from "react";
 import "./App.css";
 
-const API_URL = "http://127.0.0.1:8000";
+const API = "http://127.0.0.1:8000";
 
 function App() {
-  const [token, setToken] = useState(
-    localStorage.getItem("trustshare_token")
-  );
+  const [page, setPage] = useState("login");
 
-  const [user, setUser] = useState(null);
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
-  const [page, setPage] = useState("dashboard");
-
-  const [files, setFiles] = useState([]);
-  const [sharedFiles, setSharedFiles] = useState([]);
-
+  const [message, setMessage] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
+  const [files, setFiles] = useState([]);
 
+  const [shareFile, setShareFile] = useState("");
   const [recipientEmail, setRecipientEmail] = useState("");
 
-  const [uploading, setUploading] = useState(false);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
-  const [authMode, setAuthMode] = useState("login");
-
-  const [loginData, setLoginData] = useState({
-    email: "",
-    password: "",
-  });
-
-  const [registerData, setRegisterData] = useState({
-    username: "",
-    email: "",
-    password: "",
-  });
-
-  // =========================
-  // LOAD USER
-  // =========================
-
-  useEffect(() => {
-    if (token) {
-      getCurrentUser();
-      loadFiles();
-      loadSharedFiles();
-    }
-  }, [token]);
-
-  // =========================
-  // API HELPERS
-  // =========================
-
-  const authHeaders = {
-    Authorization: `Bearer ${token}`,
-  };
-
-  // =========================
-  // GET CURRENT USER
-  // =========================
-
-  async function getCurrentUser() {
-    try {
-      const response = await fetch(`${API_URL}/me`, {
-        headers: authHeaders,
-      });
-
-      if (!response.ok) {
-        logout();
-        return;
-      }
-
-      const data = await response.json();
-
-      setUser(data);
-    } catch (err) {
-      setError("Cannot connect to backend");
-    }
-  }
+  const token = localStorage.getItem("access_token");
 
   // =========================
   // LOGIN
   // =========================
+  const handleLogin = async () => {
+    if (!email || !password) {
+      setMessage("Please enter your email and password.");
+      return;
+    }
 
-  async function login(e) {
-    e.preventDefault();
-
-    setError("");
+    setLoading(true);
     setMessage("");
 
     try {
-      const response = await fetch(`${API_URL}/login`, {
+      const response = await fetch(`${API}/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(loginData),
+        body: JSON.stringify({
+          email,
+          password,
+        }),
       });
 
       const data = await response.json();
 
-      if (!response.ok) {
-        setError(data.detail || "Invalid email or password");
-        return;
+      if (response.ok) {
+        localStorage.setItem("access_token", data.access_token);
+
+        setMessage("");
+        setPage("dashboard");
+        setPassword("");
+      } else {
+        setMessage(data.detail || data.message || "Invalid email or password.");
       }
-
-      localStorage.setItem(
-        "trustshare_token",
-        data.access_token
-      );
-
-      setToken(data.access_token);
-
-      setLoginData({
-        email: "",
-        password: "",
-      });
-
-      setMessage("Welcome back to TrustShare");
-    } catch (err) {
-      setError("Cannot connect to backend");
+    } catch (error) {
+      console.error(error);
+      setMessage("Unable to connect to TrustShare server.");
+    } finally {
+      setLoading(false);
     }
-  }
+  };
 
   // =========================
   // REGISTER
   // =========================
+  const handleRegister = async () => {
+    if (!username || !email || !password) {
+      setMessage("Please fill in all fields.");
+      return;
+    }
 
-  async function register(e) {
-    e.preventDefault();
-
-    setError("");
+    setLoading(true);
     setMessage("");
 
     try {
-      const response = await fetch(`${API_URL}/register`, {
+      const response = await fetch(`${API}/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(registerData),
+        body: JSON.stringify({
+          username,
+          email,
+          password,
+        }),
       });
 
       const data = await response.json();
 
-      if (!response.ok) {
-        setError(data.detail || "Registration failed");
-        return;
+      if (response.ok) {
+        setMessage("Account created successfully. Please sign in.");
+
+        setUsername("");
+        setPassword("");
+
+        setPage("login");
+      } else {
+        setMessage(
+          data.detail || data.message || "Registration failed."
+        );
       }
-
-      setMessage("Account created. You can now sign in.");
-
-      setRegisterData({
-        username: "",
-        email: "",
-        password: "",
-      });
-
-      setAuthMode("login");
-    } catch (err) {
-      setError("Cannot connect to backend");
+    } catch (error) {
+      console.error(error);
+      setMessage("Unable to connect to TrustShare server.");
+    } finally {
+      setLoading(false);
     }
-  }
+  };
 
   // =========================
-  // LOGOUT
+  // CURRENT USER
   // =========================
+  const handleMe = async () => {
+    if (!token) {
+      setPage("login");
+      return;
+    }
 
-  function logout() {
-    localStorage.removeItem("trustshare_token");
-
-    setToken(null);
-    setUser(null);
-    setFiles([]);
-    setSharedFiles([]);
-    setPage("dashboard");
-  }
-
-  // =========================
-  // LOAD MY FILES
-  // =========================
-
-  async function loadFiles() {
     try {
-      const response = await fetch(`${API_URL}/files`, {
-        headers: authHeaders,
+      const response = await fetch(`${API}/me`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
 
-      if (!response.ok) {
-        return;
-      }
-
       const data = await response.json();
 
-      setFiles(data.files || []);
-    } catch (err) {
-      console.error(err);
-    }
-  }
-
-  // =========================
-  // LOAD SHARED FILES
-  // =========================
-
-  async function loadSharedFiles() {
-    try {
-      const response = await fetch(
-        `${API_URL}/shared-files`,
-        {
-          headers: authHeaders,
-        }
-      );
-
-      if (!response.ok) {
-        return;
+      if (response.ok) {
+        setMessage(
+          `Account ID: ${data.user_id} • ${data.email}`
+        );
+      } else {
+        setMessage(data.detail || "Authentication failed.");
       }
-
-      const data = await response.json();
-
-      setSharedFiles(data.files || []);
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      console.error(error);
+      setMessage("Unable to connect to TrustShare server.");
     }
-  }
+  };
 
   // =========================
   // UPLOAD
   // =========================
-
-  async function uploadFile(e) {
-    const file = e.target.files[0];
-
-    if (!file) {
+  const handleUpload = async () => {
+    if (!selectedFile) {
+      setMessage("Please choose a file first.");
       return;
     }
 
-    setUploading(true);
-    setError("");
+    if (!token) {
+      setPage("login");
+      return;
+    }
+
+    setLoading(true);
     setMessage("");
 
-    const formData = new FormData();
-
-    formData.append("file", file);
-
     try {
-      const response = await fetch(`${API_URL}/upload`, {
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+
+      const response = await fetch(`${API}/upload`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -254,2580 +174,958 @@ function App() {
 
       const data = await response.json();
 
-      if (!response.ok) {
-        setError(data.detail || "Upload failed");
-        setUploading(false);
-        return;
+      if (response.ok) {
+        setMessage(`"${data.filename}" uploaded successfully.`);
+        setSelectedFile(null);
+      } else {
+        setMessage(data.detail || "File upload failed.");
       }
+    } catch (error) {
+      console.error(error);
+      setMessage("Unable to connect to TrustShare server.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      setMessage(
-        `${data.filename} uploaded successfully`
-      );
-
-      await loadFiles();
-
-      setPage("files");
-    } catch (err) {
-      setError("Upload failed. Check your backend.");
+  // =========================
+  // GET MY FILES
+  // =========================
+  const handleFiles = async () => {
+    if (!token) {
+      setPage("login");
+      return;
     }
 
-    setUploading(false);
+    setLoading(true);
 
-    e.target.value = "";
-  }
+    try {
+      const response = await fetch(`${API}/files`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setFiles(data.files || []);
+        setPage("files");
+      } else {
+        setMessage(data.detail || "Could not load files.");
+      }
+    } catch (error) {
+      console.error(error);
+      setMessage("Unable to connect to TrustShare server.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // =========================
   // DOWNLOAD
   // =========================
-
-  async function downloadFile(filename) {
-    setError("");
-
-    try {
-      const response = await fetch(
-        `${API_URL}/download/${encodeURIComponent(filename)}`,
-        {
-          headers: authHeaders,
-        }
-      );
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-
-        setError(
-          data.detail || "Unable to download file"
-        );
-
-        return;
-      }
-
-      const blob = await response.blob();
-
-      const url = window.URL.createObjectURL(blob);
-
-      const link = document.createElement("a");
-
-      link.href = url;
-      link.download = filename;
-
-      document.body.appendChild(link);
-
-      link.click();
-
-      link.remove();
-
-      window.URL.revokeObjectURL(url);
-    } catch (err) {
-      setError("Download failed");
-    }
-  }
+  const handleDownload = (filename) => {
+    window.open(
+      `${API}/download/${encodeURIComponent(filename)}`,
+      "_blank"
+    );
+  };
 
   // =========================
   // DELETE
   // =========================
-
-  async function deleteFile(filename) {
-    const confirmed = window.confirm(
-      `Delete "${filename}"?`
-    );
-
-    if (!confirmed) {
+  const handleDelete = async (filename) => {
+    if (!token) {
+      setPage("login");
       return;
     }
 
+    const confirmed = window.confirm(
+      `Delete "${filename}"? This action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
     try {
       const response = await fetch(
-        `${API_URL}/delete/${encodeURIComponent(filename)}`,
+        `${API}/delete/${encodeURIComponent(filename)}`,
         {
           method: "DELETE",
-          headers: authHeaders,
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         }
       );
 
       const data = await response.json();
 
-      if (!response.ok) {
-        setError(
-          data.detail || "Unable to delete file"
-        );
-
-        return;
+      if (response.ok) {
+        setMessage(`"${filename}" deleted.`);
+        handleFiles();
+      } else {
+        setMessage(data.detail || "Delete failed.");
       }
-
-      setMessage(`${filename} deleted`);
-
-      await loadFiles();
-    } catch (err) {
-      setError("Delete failed");
+    } catch (error) {
+      console.error(error);
+      setMessage("Unable to connect to TrustShare server.");
     }
-  }
+  };
 
   // =========================
-  // SHARE FILE
+  // SHARE
   // =========================
-
-  async function shareFile(e) {
-    e.preventDefault();
-
-    if (!selectedFile) {
-      setError("Please select a file");
+  const handleShare = async () => {
+    if (!shareFile || !recipientEmail) {
+      setMessage("Please select a file and enter a recipient email.");
       return;
     }
 
-    if (!recipientEmail) {
-      setError("Please enter recipient email");
+    if (!token) {
+      setPage("login");
       return;
     }
 
-    setError("");
+    setLoading(true);
     setMessage("");
 
     try {
-      const response = await fetch(`${API_URL}/share`, {
+      const response = await fetch(`${API}/share`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          filename: selectedFile,
+          filename: shareFile,
           recipient_email: recipientEmail,
         }),
       });
 
       const data = await response.json();
 
-      if (!response.ok) {
-        setError(data.detail || "Sharing failed");
-        return;
+      if (response.ok) {
+        setMessage(
+          `"${shareFile}" was securely shared with ${recipientEmail}.`
+        );
+
+        setRecipientEmail("");
+        setShareFile("");
+      } else {
+        setMessage(data.detail || "File sharing failed.");
       }
-
-      setMessage(
-        `${selectedFile} shared with ${recipientEmail}`
-      );
-
-      setRecipientEmail("");
-      setSelectedFile(null);
-
-      await loadSharedFiles();
-
-      setPage("shared");
-    } catch (err) {
-      setError("Cannot connect to backend");
+    } catch (error) {
+      console.error(error);
+      setMessage("Unable to connect to TrustShare server.");
+    } finally {
+      setLoading(false);
     }
-  }
+  };
 
   // =========================
-  // AUTH SCREEN
+  // SHARED FILES
   // =========================
+  const handleSharedFiles = async () => {
+    if (!token) {
+      setPage("login");
+      return;
+    }
 
-  if (!token) {
-    return (
-      <>
-        <style>{styles}</style>
+    setLoading(true);
 
-        <div className="auth-page">
+    try {
+      const response = await fetch(`${API}/shared-files`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-          <div className="auth-orbit orbit-one"></div>
-          <div className="auth-orbit orbit-two"></div>
+      const data = await response.json();
 
-          <div className="auth-left">
+      if (response.ok) {
+        setFiles(data.files || []);
+        setPage("shared-files");
+      } else {
+        setMessage(
+          data.detail || "Could not load shared files."
+        );
+      }
+    } catch (error) {
+      console.error(error);
+      setMessage("Unable to connect to TrustShare server.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-            <div className="brand-mark">
-              <div className="brand-shield">✓</div>
+  // =========================
+  // LOGOUT
+  // =========================
+  const handleLogout = () => {
+    localStorage.removeItem("access_token");
 
-              <div>
-                <div className="brand-name">
-                  TrustShare
-                </div>
+    setPage("login");
+    setMessage("");
 
-                <div className="brand-tagline">
-                  Share with confidence.
-                </div>
-              </div>
-            </div>
+    setEmail("");
+    setPassword("");
+    setFiles([]);
+  };
 
-            <div className="hero-copy">
+  // =========================
+  // SIDEBAR
+  // =========================
+  const Sidebar = () => (
+    <aside className="sidebar">
+      <div className="brand">
+        <div className="brand-icon">✓</div>
 
-              <div className="eyebrow">
-                <span></span>
-                PRIVATE FILE EXCHANGE
-              </div>
-
-              <h1>
-                Your files.
-                <br />
-
-                <span>Your trust.</span>
-              </h1>
-
-              <p>
-                A secure space to store, share and
-                access the files that matter.
-              </p>
-
-              <div className="trust-pills">
-
-                <div>
-                  <span>◈</span>
-                  Private
-                </div>
-
-                <div>
-                  <span>✓</span>
-                  Protected
-                </div>
-
-                <div>
-                  <span>↗</span>
-                  Simple
-                </div>
-
-              </div>
-
-            </div>
-
-            <div className="auth-footer">
-              TRUSTSHARE • YOUR DIGITAL VAULT
-            </div>
-
+        <div>
+          <div className="brand-name">TrustShare</div>
+          <div className="brand-tagline">
+            Secure file sharing
           </div>
-
-          <div className="auth-right">
-
-            <div className="auth-card">
-
-              <div className="mini-trust">
-
-                <div className="mini-ring">
-                  <span>✓</span>
-                </div>
-
-                <div>
-                  <strong>Trust Layer</strong>
-                  <small>
-                    Your private workspace
-                  </small>
-                </div>
-
-              </div>
-
-              {authMode === "login" ? (
-                <>
-                  <div className="form-heading">
-                    <h2>Welcome back</h2>
-
-                    <p>
-                      Enter your details to continue.
-                    </p>
-                  </div>
-
-                  <form onSubmit={login}>
-
-                    <label>Email</label>
-
-                    <input
-                      type="email"
-                      placeholder="you@example.com"
-                      value={loginData.email}
-                      onChange={(e) =>
-                        setLoginData({
-                          ...loginData,
-                          email: e.target.value,
-                        })
-                      }
-                      required
-                    />
-
-                    <label>Password</label>
-
-                    <input
-                      type="password"
-                      placeholder="••••••••"
-                      value={loginData.password}
-                      onChange={(e) =>
-                        setLoginData({
-                          ...loginData,
-                          password: e.target.value,
-                        })
-                      }
-                      required
-                    />
-
-                    {error && (
-                      <div className="error-box">
-                        {error}
-                      </div>
-                    )}
-
-                    {message && (
-                      <div className="success-box">
-                        {message}
-                      </div>
-                    )}
-
-                    <button
-                      className="primary-button"
-                      type="submit"
-                    >
-                      Enter TrustShare
-                      <span>→</span>
-                    </button>
-
-                  </form>
-
-                  <div className="auth-switch">
-                    Don't have an account?
-
-                    <button
-                      onClick={() => {
-                        setAuthMode("register");
-                        setError("");
-                        setMessage("");
-                      }}
-                    >
-                      Create one
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="form-heading">
-                    <h2>Create your vault</h2>
-
-                    <p>
-                      Start sharing with confidence.
-                    </p>
-                  </div>
-
-                  <form onSubmit={register}>
-
-                    <label>Username</label>
-
-                    <input
-                      type="text"
-                      placeholder="Your name"
-                      value={registerData.username}
-                      onChange={(e) =>
-                        setRegisterData({
-                          ...registerData,
-                          username: e.target.value,
-                        })
-                      }
-                      required
-                    />
-
-                    <label>Email</label>
-
-                    <input
-                      type="email"
-                      placeholder="you@example.com"
-                      value={registerData.email}
-                      onChange={(e) =>
-                        setRegisterData({
-                          ...registerData,
-                          email: e.target.value,
-                        })
-                      }
-                      required
-                    />
-
-                    <label>Password</label>
-
-                    <input
-                      type="password"
-                      placeholder="Create a password"
-                      value={registerData.password}
-                      onChange={(e) =>
-                        setRegisterData({
-                          ...registerData,
-                          password: e.target.value,
-                        })
-                      }
-                      required
-                    />
-
-                    {error && (
-                      <div className="error-box">
-                        {error}
-                      </div>
-                    )}
-
-                    {message && (
-                      <div className="success-box">
-                        {message}
-                      </div>
-                    )}
-
-                    <button
-                      className="primary-button"
-                      type="submit"
-                    >
-                      Create TrustShare
-                      <span>→</span>
-                    </button>
-
-                  </form>
-
-                  <div className="auth-switch">
-                    Already have an account?
-
-                    <button
-                      onClick={() => {
-                        setAuthMode("login");
-                        setError("");
-                        setMessage("");
-                      }}
-                    >
-                      Sign in
-                    </button>
-                  </div>
-                </>
-              )}
-
-            </div>
-
-          </div>
-
         </div>
-      </>
-    );
-  }
+      </div>
+
+      <div className="nav-section">
+        <span className="nav-title">WORKSPACE</span>
+
+        <button
+          className={page === "dashboard" ? "nav-item active" : "nav-item"}
+          onClick={() => {
+            setPage("dashboard");
+            setMessage("");
+          }}
+        >
+          <span>⌂</span>
+          Dashboard
+        </button>
+
+        <button
+          className={page === "files" ? "nav-item active" : "nav-item"}
+          onClick={handleFiles}
+        >
+          <span>▣</span>
+          My Files
+        </button>
+
+        <button
+          className={page === "upload" ? "nav-item active" : "nav-item"}
+          onClick={() => {
+            setPage("upload");
+            setMessage("");
+          }}
+        >
+          <span>↑</span>
+          Upload
+        </button>
+
+        <button
+          className={page === "shared-files" ? "nav-item active" : "nav-item"}
+          onClick={handleSharedFiles}
+        >
+          <span>⇄</span>
+          Shared With Me
+        </button>
+      </div>
+
+      <div className="nav-section account-section">
+        <span className="nav-title">ACCOUNT</span>
+
+        <button className="nav-item" onClick={handleMe}>
+          <span>◯</span>
+          My Account
+        </button>
+      </div>
+
+      <div className="sidebar-bottom">
+        <button className="logout-button" onClick={handleLogout}>
+          <span>↪</span>
+          Logout
+        </button>
+      </div>
+    </aside>
+  );
+
+  // =========================
+  // HEADER
+  // =========================
+  const Header = () => (
+    <header className="topbar">
+      <div>
+        <span className="secure-label">SECURE WORKSPACE</span>
+      </div>
+
+      <div className="user-area">
+        <div className="online-dot"></div>
+
+        <div className="avatar">P</div>
+
+        <div className="user-info">
+          <strong>Purneswari</strong>
+          <span>Personal account</span>
+        </div>
+      </div>
+    </header>
+  );
 
   // =========================
   // DASHBOARD
   // =========================
+  const Dashboard = () => (
+    <div className="dashboard-page">
+      <div className="welcome-row">
+        <div>
+          <span className="eyebrow">WELCOME BACK</span>
 
+          <h1>Good morning, Purneswari 👋</h1>
+
+          <p>
+            Your files are safe, organized and ready to share.
+          </p>
+        </div>
+
+        <button
+          className="primary-action"
+          onClick={() => {
+            setPage("upload");
+            setMessage("");
+          }}
+        >
+          + Upload file
+        </button>
+      </div>
+
+      <div className="stats-grid">
+        <div className="stat-card">
+          <div className="stat-icon">▣</div>
+
+          <div>
+            <span>Total files</span>
+            <strong>{files.length || "—"}</strong>
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-icon">⇄</div>
+
+          <div>
+            <span>Shared files</span>
+            <strong>—</strong>
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-icon">✓</div>
+
+          <div>
+            <span>Security</span>
+            <strong>Active</strong>
+          </div>
+        </div>
+      </div>
+
+      <div className="dashboard-grid">
+        <div className="panel">
+          <div className="panel-header">
+            <div>
+              <span className="eyebrow">QUICK ACTIONS</span>
+              <h2>What would you like to do?</h2>
+            </div>
+          </div>
+
+          <div className="quick-actions">
+            <button
+              className="quick-card"
+              onClick={() => {
+                setPage("upload");
+                setMessage("");
+              }}
+            >
+              <div className="quick-icon upload-icon">↑</div>
+              <strong>Upload a file</strong>
+              <span>Add a new document to your workspace.</span>
+            </button>
+
+            <button
+              className="quick-card"
+              onClick={handleFiles}
+            >
+              <div className="quick-icon file-icon">▣</div>
+              <strong>View my files</strong>
+              <span>Manage your uploaded documents.</span>
+            </button>
+
+            <button
+              className="quick-card"
+              onClick={() => {
+                setPage("share");
+                setMessage("");
+                handleFiles();
+              }}
+            >
+              <div className="quick-icon share-icon">⇄</div>
+              <strong>Share securely</strong>
+              <span>Send a file to someone you trust.</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="security-card">
+          <div className="security-shield">✓</div>
+
+          <span className="eyebrow">TRUSTSHARE SECURITY</span>
+
+          <h2>Your workspace is protected.</h2>
+
+          <p>
+            Your account uses authenticated access so your
+            files remain available only to authorized users.
+          </p>
+
+          <div className="security-status">
+            <span></span>
+            Authentication active
+          </div>
+        </div>
+      </div>
+
+      {message && <div className="dashboard-message">{message}</div>}
+    </div>
+  );
+
+  // =========================
+  // LOGIN
+  // =========================
+  if (page === "login") {
+    return (
+      <div className="auth-page">
+        <div className="auth-decoration">
+          <div className="auth-circle circle-one"></div>
+          <div className="auth-circle circle-two"></div>
+        </div>
+
+        <div className="auth-container">
+          <div className="auth-brand">
+            <div className="large-brand-icon">✓</div>
+
+            <h1>TrustShare</h1>
+
+            <p>
+              Your files. Your control.
+            </p>
+          </div>
+
+          <div className="auth-card">
+            <span className="eyebrow">WELCOME BACK</span>
+
+            <h2>Sign in to your workspace</h2>
+
+            <p className="auth-description">
+              Access your files and share them securely.
+            </p>
+
+            <label>Email address</label>
+
+            <input
+              className="input"
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+
+            <label>Password</label>
+
+            <div className="password-wrapper">
+              <input
+                className="input"
+                type={showPassword ? "text" : "password"}
+                placeholder="Enter your password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+
+              <button
+                className="password-toggle"
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? "Hide" : "Show"}
+              </button>
+            </div>
+
+            {message && (
+              <div className="auth-message">
+                {message}
+              </div>
+            )}
+
+            <button
+              className="auth-button"
+              onClick={handleLogin}
+              disabled={loading}
+            >
+              {loading ? "Signing in..." : "Sign in"}
+            </button>
+
+            <div className="auth-divider">
+              <span></span>
+              <small>NEW TO TRUSTSHARE?</small>
+              <span></span>
+            </div>
+
+            <button
+              className="outline-button"
+              onClick={() => {
+                setPage("register");
+                setMessage("");
+              }}
+            >
+              Create an account
+            </button>
+          </div>
+
+          <div className="auth-footer">
+            🔒 Your connection to TrustShare is protected
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // =========================
+  // REGISTER
+  // =========================
+  if (page === "register") {
+    return (
+      <div className="auth-page">
+        <div className="auth-container">
+          <div className="auth-brand">
+            <div className="large-brand-icon">✓</div>
+
+            <h1>TrustShare</h1>
+
+            <p>
+              A safer way to share your files.
+            </p>
+          </div>
+
+          <div className="auth-card">
+            <span className="eyebrow">GET STARTED</span>
+
+            <h2>Create your account</h2>
+
+            <p className="auth-description">
+              Set up your secure TrustShare workspace.
+            </p>
+
+            <label>Username</label>
+
+            <input
+              className="input"
+              type="text"
+              placeholder="Your name"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+            />
+
+            <label>Email address</label>
+
+            <input
+              className="input"
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+
+            <label>Password</label>
+
+            <div className="password-wrapper">
+              <input
+                className="input"
+                type={showPassword ? "text" : "password"}
+                placeholder="Create a password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+
+              <button
+                className="password-toggle"
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? "Hide" : "Show"}
+              </button>
+            </div>
+
+            {message && (
+              <div className="auth-message">
+                {message}
+              </div>
+            )}
+
+            <button
+              className="auth-button"
+              onClick={handleRegister}
+              disabled={loading}
+            >
+              {loading ? "Creating account..." : "Create account"}
+            </button>
+
+            <button
+              className="text-button"
+              onClick={() => {
+                setPage("login");
+                setMessage("");
+              }}
+            >
+              ← Back to sign in
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // =========================
+  // APPLICATION
+  // =========================
   return (
-    <>
-      <style>{styles}</style>
+    <div className="application">
+      <Sidebar />
 
-      <div className="app-shell">
+      <main className="main-content">
+        <Header />
 
-        {/* SIDEBAR */}
+        {page === "dashboard" && <Dashboard />}
 
-        <aside className="sidebar">
-
-          <div className="sidebar-brand">
-
-            <div className="brand-shield small">
-              ✓
-            </div>
-
-            <div>
-              <strong>TrustShare</strong>
-
-              <small>
-                Secure workspace
-              </small>
-            </div>
-
-          </div>
-
-          <nav>
-
-            <button
-              className={
-                page === "dashboard"
-                  ? "nav-item active"
-                  : "nav-item"
-              }
-              onClick={() => setPage("dashboard")}
-            >
-              <span>⌂</span>
-              Overview
-            </button>
-
-            <button
-              className={
-                page === "files"
-                  ? "nav-item active"
-                  : "nav-item"
-              }
-              onClick={() => setPage("files")}
-            >
-              <span>▣</span>
-              My Files
-              <b>{files.length}</b>
-            </button>
-
-            <button
-              className={
-                page === "shared"
-                  ? "nav-item active"
-                  : "nav-item"
-              }
-              onClick={() => setPage("shared")}
-            >
-              <span>⇄</span>
-              Shared With Me
-              <b>{sharedFiles.length}</b>
-            </button>
-
-          </nav>
-
-          <div className="sidebar-trust">
-
-            <div className="sidebar-trust-ring">
-              ✓
-            </div>
-
-            <div>
-              <strong>Protected</strong>
-
-              <span>
-                Your session is secure
-              </span>
-            </div>
-
-          </div>
-
-          <button
-            className="logout-button"
-            onClick={logout}
-          >
-            ↪
-            Sign out
-          </button>
-
-        </aside>
-
-        {/* MAIN */}
-
-        <main className="main-content">
-
-          <header className="topbar">
-
-            <div>
-              <div className="topbar-label">
-                TRUSTSHARE / {page.toUpperCase()}
-              </div>
-
-              <h1>
-                {page === "dashboard" &&
-                  "Your trusted space."}
-
-                {page === "files" &&
-                  "Your files."}
-
-                {page === "shared" &&
-                  "Files shared with you."}
-
-                {page === "share" &&
-                  "Share securely."}
-              </h1>
-            </div>
-
-            <div className="profile">
-
-              <div className="avatar">
-                {(
-                  user?.email?.[0] || "U"
-                ).toUpperCase()}
-              </div>
-
+        {/* =========================
+            MY FILES
+        ========================= */}
+        {page === "files" && (
+          <div className="content-page">
+            <div className="page-heading">
               <div>
+                <span className="eyebrow">WORKSPACE</span>
+                <h1>My Files</h1>
+                <p>Manage the files stored in your workspace.</p>
+              </div>
+
+              <button
+                className="primary-action"
+                onClick={() => setPage("upload")}
+              >
+                + Upload file
+              </button>
+            </div>
+
+            <div className="files-container">
+              {files.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-icon">▣</div>
+
+                  <h2>No files yet</h2>
+
+                  <p>
+                    Upload your first file to get started.
+                  </p>
+
+                  <button
+                    className="primary-action"
+                    onClick={() => setPage("upload")}
+                  >
+                    Upload your first file
+                  </button>
+                </div>
+              ) : (
+                files.map((file, index) => (
+                  <div className="real-file-card" key={index}>
+                    <div className="file-type-icon">
+                      PDF
+                    </div>
+
+                    <div className="file-details">
+                      <strong>{file}</strong>
+
+                      <span>
+                        Stored securely in your workspace
+                      </span>
+                    </div>
+
+                    <div className="file-actions">
+                      <button
+                        className="small-button"
+                        onClick={() => {
+                          setShareFile(file);
+                          setRecipientEmail("");
+                          setPage("share");
+                        }}
+                      >
+                        Share
+                      </button>
+
+                      <button
+                        className="small-button"
+                        onClick={() => handleDownload(file)}
+                      >
+                        Download
+                      </button>
+
+                      <button
+                        className="small-delete"
+                        onClick={() => handleDelete(file)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {message && (
+              <div className="dashboard-message">{message}</div>
+            )}
+          </div>
+        )}
+
+        {/* =========================
+            UPLOAD
+        ========================= */}
+        {page === "upload" && (
+          <div className="content-page narrow-page">
+            <div className="page-heading">
+              <div>
+                <span className="eyebrow">WORKSPACE</span>
+
+                <h1>Upload a file</h1>
+
+                <p>
+                  Add a document to your secure workspace.
+                </p>
+              </div>
+            </div>
+
+            <div className="upload-card">
+              <label className="upload-zone">
+                <input
+                  type="file"
+                  onChange={(e) => {
+                    if (e.target.files?.length) {
+                      setSelectedFile(e.target.files[0]);
+                    }
+                  }}
+                />
+
+                <div className="upload-icon-large">↑</div>
+
                 <strong>
-                  {user?.email || "User"}
+                  {selectedFile
+                    ? selectedFile.name
+                    : "Choose a file"}
                 </strong>
 
                 <span>
-                  Verified account
+                  {selectedFile
+                    ? `${(
+                        selectedFile.size /
+                        1024 /
+                        1024
+                      ).toFixed(2)} MB`
+                    : "Click here to browse files from your computer"}
                 </span>
-              </div>
+              </label>
 
-            </div>
-
-          </header>
-
-          {/* ALERTS */}
-
-          {error && (
-            <div className="global-error">
-              <span>!</span>
-              {error}
+              {message && (
+                <div className="dashboard-message">
+                  {message}
+                </div>
+              )}
 
               <button
-                onClick={() => setError("")}
+                className="auth-button"
+                onClick={handleUpload}
+                disabled={loading}
               >
-                ×
+                {loading ? "Uploading..." : "Upload securely"}
               </button>
-            </div>
-          )}
-
-          {message && (
-            <div className="global-success">
-              <span>✓</span>
-              {message}
 
               <button
-                onClick={() => setMessage("")}
+                className="text-button"
+                onClick={() => {
+                  setPage("dashboard");
+                  setMessage("");
+                }}
               >
-                ×
+                ← Back to dashboard
               </button>
             </div>
-          )}
+          </div>
+        )}
 
-          {/* DASHBOARD */}
+        {/* =========================
+            SHARE
+        ========================= */}
+        {page === "share" && (
+          <div className="content-page narrow-page">
+            <div className="page-heading">
+              <div>
+                <span className="eyebrow">COLLABORATION</span>
 
-          {page === "dashboard" && (
-            <div className="content">
+                <h1>Share a file</h1>
 
-              <section className="welcome-grid">
+                <p>
+                  Send a file securely to someone you trust.
+                </p>
+              </div>
+            </div>
 
-                <div className="welcome-card">
-
-                  <div className="welcome-eyebrow">
-                    GOOD TO SEE YOU
-                  </div>
-
-                  <h2>
-                    Welcome to your
-                    <span> trusted vault.</span>
-                  </h2>
-
-                  <p>
-                    Everything you upload stays
-                    connected to your account.
-                    Share only when you're ready.
-                  </p>
-
-                  <label className="upload-button">
-
-                    {uploading
-                      ? "Uploading..."
-                      : "＋ Upload a file"}
-
-                    <input
-                      type="file"
-                      onChange={uploadFile}
-                      disabled={uploading}
-                    />
-
-                  </label>
-
-                </div>
-
-                <div className="trust-card">
-
-                  <div className="trust-ring-large">
-
-                    <div className="ring-inner">
-                      <strong>100%</strong>
-                      <span>TRUST</span>
-                    </div>
-
-                  </div>
-
-                  <div className="trust-card-copy">
-
-                    <span>YOUR SECURITY</span>
-
-                    <h3>
-                      Account protected
-                    </h3>
-
-                    <p>
-                      Authenticated session active.
-                    </p>
-
-                  </div>
-
-                </div>
-
-              </section>
-
-              <section className="stats">
-
-                <div className="stat-card">
-
-                  <div className="stat-icon">
-                    ▣
-                  </div>
-
-                  <div>
-                    <span>MY FILES</span>
-                    <strong>{files.length}</strong>
-                  </div>
-
-                </div>
-
-                <div className="stat-card">
-
-                  <div className="stat-icon">
-                    ⇄
-                  </div>
-
-                  <div>
-                    <span>SHARED WITH ME</span>
-                    <strong>{sharedFiles.length}</strong>
-                  </div>
-
-                </div>
-
-                <div className="stat-card">
-
-                  <div className="stat-icon">
-                    ✓
-                  </div>
-
-                  <div>
-                    <span>ACCOUNT</span>
-                    <strong>Secure</strong>
-                  </div>
-
-                </div>
-
-              </section>
-
-              <section className="section-heading">
+            <div className="share-card">
+              <div className="share-step">
+                <span className="step-number">1</span>
 
                 <div>
-                  <span>YOUR SPACE</span>
-                  <h2>Recent files</h2>
+                  <strong>Select a file</strong>
+                  <p>Choose the document you want to share.</p>
                 </div>
+              </div>
 
-                <button
-                  onClick={() => setPage("files")}
-                >
-                  View all →
-                </button>
+              <select
+                className="input"
+                value={shareFile}
+                onChange={(e) => setShareFile(e.target.value)}
+              >
+                <option value="">Select a file</option>
 
-              </section>
+                {files.map((file, index) => (
+                  <option key={index} value={file}>
+                    {file}
+                  </option>
+                ))}
+              </select>
 
-              <FileList
-                files={files.slice(0, 4)}
-                onDownload={downloadFile}
-                onDelete={deleteFile}
-                onShare={(filename) => {
-                  setSelectedFile(filename);
-                  setPage("share");
-                }}
+              <div className="share-step">
+                <span className="step-number">2</span>
+
+                <div>
+                  <strong>Who should receive it?</strong>
+                  <p>
+                    Enter the recipient's TrustShare email.
+                  </p>
+                </div>
+              </div>
+
+              <input
+                className="input"
+                type="email"
+                placeholder="recipient@example.com"
+                value={recipientEmail}
+                onChange={(e) =>
+                  setRecipientEmail(e.target.value)
+                }
               />
 
-            </div>
-          )}
-
-          {/* MY FILES */}
-
-          {page === "files" && (
-            <div className="content">
-
-              <div className="page-action-row">
+              <div className="trust-note">
+                <span>✓</span>
 
                 <div>
+                  <strong>Share with confidence</strong>
+
                   <p>
-                    Files belonging to your account.
+                    TrustShare uses authenticated access
+                    to protect your files.
                   </p>
                 </div>
-
-                <label className="upload-button compact">
-
-                  ＋ Upload file
-
-                  <input
-                    type="file"
-                    onChange={uploadFile}
-                    disabled={uploading}
-                  />
-
-                </label>
-
               </div>
 
-              <FileList
-                files={files}
-                onDownload={downloadFile}
-                onDelete={deleteFile}
-                onShare={(filename) => {
-                  setSelectedFile(filename);
-                  setPage("share");
+              {message && (
+                <div className="dashboard-message">
+                  {message}
+                </div>
+              )}
+
+              <button
+                className="auth-button"
+                onClick={handleShare}
+                disabled={loading}
+              >
+                {loading ? "Sharing..." : "Share securely"}
+              </button>
+
+              <button
+                className="text-button"
+                onClick={() => {
+                  setPage("dashboard");
+                  setMessage("");
                 }}
-              />
-
+              >
+                ← Back to dashboard
+              </button>
             </div>
-          )}
+          </div>
+        )}
 
-          {/* SHARED */}
+        {/* =========================
+            SHARED WITH ME
+        ========================= */}
+        {page === "shared-files" && (
+          <div className="content-page">
+            <div className="page-heading">
+              <div>
+                <span className="eyebrow">COLLABORATION</span>
 
-          {page === "shared" && (
-            <div className="content">
+                <h1>Shared With Me</h1>
 
-              <div className="shared-banner">
+                <p>
+                  Files that other TrustShare users have shared with you.
+                </p>
+              </div>
+            </div>
 
-                <div className="shared-symbol">
-                  ⇄
-                </div>
+            <div className="files-container">
+              {files.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-icon">⇄</div>
 
-                <div>
-                  <span>
-                    TRUST NETWORK
-                  </span>
-
-                  <h2>
-                    Files shared with you
-                  </h2>
+                  <h2>Nothing shared yet</h2>
 
                   <p>
-                    Files another TrustShare user
-                    has shared with your account.
+                    Files shared with your account will appear here.
                   </p>
                 </div>
-
-              </div>
-
-              <div className="file-grid">
-
-                {sharedFiles.length === 0 ? (
-                  <EmptyState
-                    icon="⇄"
-                    title="Nothing shared yet"
-                    text="Files shared with your account will appear here."
-                  />
-                ) : (
-                  sharedFiles.map((filename, index) => (
-                    <div
-                      className="file-card shared-file"
-                      key={`${filename}-${index}`}
-                    >
-
-                      <div className="file-top">
-
-                        <div className="pdf-icon">
-                          PDF
-                        </div>
-
-                        <span className="shared-tag">
-                          SHARED
-                        </span>
-
-                      </div>
-
-                      <h3 title={filename}>
-                        {filename}
-                      </h3>
-
-                      <div className="file-meta">
-                        <span>
-                          Shared with you
-                        </span>
-
-                        <span>
-                          •
-                        </span>
-
-                        <span>
-                          TrustShare
-                        </span>
-                      </div>
-
-                      <button
-                        className="download-button"
-                        onClick={() =>
-                          downloadFile(filename)
-                        }
-                      >
-                        Download file
-                        <span>↓</span>
-                      </button>
-
-                    </div>
-                  ))
-                )}
-
-              </div>
-
-            </div>
-          )}
-
-          {/* SHARE */}
-
-          {page === "share" && (
-            <div className="content">
-
-              <div className="share-layout">
-
-                <div className="share-visual">
-
-                  <div className="share-orbit"></div>
-
-                  <div className="share-core">
-                    ⇄
-                  </div>
-
-                  <div className="share-copy">
-
-                    <span>
-                      TRUSTED TRANSFER
-                    </span>
-
-                    <h2>
-                      Share without
-                      <br />
-                      losing control.
-                    </h2>
-
-                    <p>
-                      Choose who receives your
-                      file and send it through
-                      your TrustShare workspace.
-                    </p>
-
-                  </div>
-
-                </div>
-
-                <div className="share-form-card">
-
-                  <div className="form-heading">
-
-                    <span>
-                      SECURE SHARE
-                    </span>
-
-                    <h2>
-                      Send a file
-                    </h2>
-
-                    <p>
-                      Select a file and enter
-                      the recipient's email.
-                    </p>
-
-                  </div>
-
-                  <form onSubmit={shareFile}>
-
-                    <label>
+              ) : (
+                files.map((file, index) => (
+                  <div className="real-file-card" key={index}>
+                    <div className="file-type-icon">
                       FILE
-                    </label>
-
-                    <select
-                      value={selectedFile || ""}
-                      onChange={(e) =>
-                        setSelectedFile(
-                          e.target.value
-                        )
-                      }
-                      required
-                    >
-                      <option value="">
-                        Choose a file
-                      </option>
-
-                      {files.map((filename) => (
-                        <option
-                          key={filename}
-                          value={filename}
-                        >
-                          {filename}
-                        </option>
-                      ))}
-                    </select>
-
-                    <label>
-                      RECIPIENT EMAIL
-                    </label>
-
-                    <input
-                      type="email"
-                      placeholder="recipient@example.com"
-                      value={recipientEmail}
-                      onChange={(e) =>
-                        setRecipientEmail(
-                          e.target.value
-                        )
-                      }
-                      required
-                    />
-
-                    <div className="secure-note">
-
-                      <span>✓</span>
-
-                      <div>
-                        <strong>
-                          Protected transfer
-                        </strong>
-
-                        <p>
-                          Your session verifies
-                          every sharing request.
-                        </p>
-                      </div>
-
                     </div>
 
-                    <button
-                      className="primary-button"
-                      type="submit"
-                    >
-                      Share securely
-                      <span>→</span>
-                    </button>
+                    <div className="file-details">
+                      <strong>{file}</strong>
 
-                  </form>
+                      <span>
+                        Shared with your TrustShare account
+                      </span>
+                    </div>
 
-                  <button
-                    className="back-button"
-                    onClick={() => setPage("files")}
-                  >
-                    ← Back to My Files
-                  </button>
-
-                </div>
-
-              </div>
-
+                    <div className="file-actions">
+                      <button
+                        className="small-button"
+                        onClick={() => handleDownload(file)}
+                      >
+                        Download
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
-          )}
-
-        </main>
-
-      </div>
-    </>
-  );
-}
-
-
-// =========================
-// FILE LIST
-// =========================
-
-function FileList({
-  files,
-  onDownload,
-  onDelete,
-  onShare,
-}) {
-  if (files.length === 0) {
-    return (
-      <EmptyState
-        icon="▣"
-        title="Your vault is empty"
-        text="Upload your first file to start using TrustShare."
-      />
-    );
-  }
-
-  return (
-    <div className="file-grid">
-
-      {files.map((filename, index) => (
-        <div
-          className="file-card"
-          key={`${filename}-${index}`}
-        >
-
-          <div className="file-top">
-
-            <div className="pdf-icon">
-              PDF
-            </div>
-
-            <div className="file-menu">
-              SECURE
-            </div>
-
           </div>
-
-          <h3 title={filename}>
-            {filename}
-          </h3>
-
-          <div className="file-meta">
-
-            <span>
-              Your file
-            </span>
-
-            <span>•</span>
-
-            <span>
-              Protected
-            </span>
-
-          </div>
-
-          <div className="file-actions">
-
-            <button
-              onClick={() =>
-                onDownload(filename)
-              }
-              className="download-button"
-            >
-              Download
-              <span>↓</span>
-            </button>
-
-            <button
-              onClick={() =>
-                onShare(filename)
-              }
-              className="icon-action share-action"
-              title="Share"
-            >
-              ⇄
-            </button>
-
-            <button
-              onClick={() =>
-                onDelete(filename)
-              }
-              className="icon-action delete-action"
-              title="Delete"
-            >
-              ×
-            </button>
-
-          </div>
-
-        </div>
-      ))}
-
+        )}
+      </main>
     </div>
   );
 }
-
-
-// =========================
-// EMPTY STATE
-// =========================
-
-function EmptyState({
-  icon,
-  title,
-  text,
-}) {
-  return (
-    <div className="empty-state">
-
-      <div className="empty-icon">
-        {icon}
-      </div>
-
-      <h2>
-        {title}
-      </h2>
-
-      <p>
-        {text}
-      </p>
-
-    </div>
-  );
-}
-
-
-// =========================
-// DESIGN SYSTEM
-// =========================
-
-const styles = `
-* {
-  box-sizing: border-box;
-}
-
-:root {
-  --trust-950: #061316;
-  --trust-900: #091b1e;
-  --trust-850: #0d2426;
-  --trust-800: #103033;
-
-  --trust-700: #164347;
-  --trust-600: #1b5c5e;
-
-  --trust-500: #238486;
-  --trust-400: #39aaa5;
-  --trust-300: #75d3c7;
-
-  --trust-mint: #b8eee2;
-
-  --paper: #f5faf8;
-  --ink: #102628;
-  --muted: #708482;
-
-  --danger: #c96060;
-
-  --radius: 22px;
-}
-
-body {
-  margin: 0;
-  font-family:
-    Inter,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
-
-  background: var(--paper);
-  color: var(--ink);
-}
-
-button,
-input,
-select {
-  font: inherit;
-}
-
-button {
-  cursor: pointer;
-}
-
-
-/* =========================
-   AUTH
-========================= */
-
-.auth-page {
-  min-height: 100vh;
-  display: grid;
-  grid-template-columns: 1.1fr 0.9fr;
-  background:
-    radial-gradient(
-      circle at 15% 15%,
-      rgba(57,170,165,0.2),
-      transparent 32%
-    ),
-    radial-gradient(
-      circle at 85% 80%,
-      rgba(117,211,199,0.12),
-      transparent 35%
-    ),
-    var(--trust-950);
-  color: white;
-  position: relative;
-  overflow: hidden;
-}
-
-.auth-left {
-  padding: 58px 8vw 42px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  position: relative;
-  z-index: 2;
-}
-
-.brand-mark {
-  display: flex;
-  align-items: center;
-  gap: 13px;
-}
-
-.brand-shield {
-  width: 46px;
-  height: 52px;
-  border-radius: 15px 15px 19px 19px;
-  display: grid;
-  place-items: center;
-  font-size: 22px;
-  font-weight: 800;
-  color: var(--trust-950);
-  background:
-    linear-gradient(
-      145deg,
-      var(--trust-mint),
-      var(--trust-400)
-    );
-  box-shadow:
-    0 0 35px rgba(57,170,165,0.35);
-}
-
-.brand-shield.small {
-  width: 38px;
-  height: 43px;
-  font-size: 18px;
-}
-
-.brand-name {
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: -0.6px;
-}
-
-.brand-tagline {
-  margin-top: 3px;
-  color: #83a6a2;
-  font-size: 11px;
-  letter-spacing: 0.5px;
-}
-
-.hero-copy {
-  max-width: 620px;
-  margin-top: -30px;
-}
-
-.eyebrow {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--trust-300);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 2.5px;
-}
-
-.eyebrow span {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--trust-300);
-  box-shadow:
-    0 0 15px var(--trust-300);
-}
-
-.hero-copy h1 {
-  margin: 24px 0 20px;
-  font-size: clamp(52px, 6vw, 86px);
-  line-height: 0.96;
-  letter-spacing: -5px;
-}
-
-.hero-copy h1 span {
-  color: var(--trust-300);
-}
-
-.hero-copy p {
-  max-width: 500px;
-  color: #8aa8a6;
-  font-size: 17px;
-  line-height: 1.7;
-}
-
-.trust-pills {
-  display: flex;
-  gap: 10px;
-  margin-top: 32px;
-  flex-wrap: wrap;
-}
-
-.trust-pills div {
-  padding: 11px 15px;
-  border: 1px solid rgba(117,211,199,0.15);
-  border-radius: 999px;
-  background: rgba(255,255,255,0.035);
-  color: #b4cbc8;
-  font-size: 12px;
-}
-
-.trust-pills span {
-  color: var(--trust-300);
-  margin-right: 7px;
-}
-
-.auth-footer {
-  color: #486765;
-  font-size: 9px;
-  letter-spacing: 2px;
-}
-
-.auth-right {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 40px;
-  background: rgba(255,255,255,0.025);
-  border-left: 1px solid rgba(255,255,255,0.06);
-  position: relative;
-  z-index: 3;
-}
-
-.auth-card {
-  width: min(440px, 100%);
-  padding: 38px;
-  border-radius: 28px;
-  background: rgba(245,250,248,0.98);
-  color: var(--ink);
-  box-shadow:
-    0 35px 100px rgba(0,0,0,0.35);
-}
-
-.mini-trust {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 42px;
-}
-
-.mini-ring {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: #d8f2ec;
-  color: var(--trust-600);
-  font-weight: 800;
-}
-
-.mini-trust strong,
-.mini-trust small {
-  display: block;
-}
-
-.mini-trust strong {
-  font-size: 12px;
-}
-
-.mini-trust small {
-  color: var(--muted);
-  font-size: 10px;
-  margin-top: 2px;
-}
-
-.form-heading h2 {
-  margin: 0;
-  font-size: 32px;
-  letter-spacing: -1.5px;
-}
-
-.form-heading p {
-  margin: 8px 0 28px;
-  color: var(--muted);
-  font-size: 13px;
-}
-
-form label {
-  display: block;
-  margin: 18px 0 8px;
-  color: #52706e;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 1.5px;
-}
-
-form input,
-form select {
-  width: 100%;
-  height: 50px;
-  border: 1px solid #dce8e5;
-  border-radius: 13px;
-  padding: 0 15px;
-  outline: none;
-  background: white;
-  color: var(--ink);
-  transition: 0.2s;
-}
-
-form input:focus,
-form select:focus {
-  border-color: var(--trust-400);
-  box-shadow:
-    0 0 0 4px rgba(57,170,165,0.1);
-}
-
-.primary-button {
-  width: 100%;
-  min-height: 53px;
-  margin-top: 22px;
-  border: 0;
-  border-radius: 14px;
-  padding: 0 20px;
-  background:
-    linear-gradient(
-      110deg,
-      var(--trust-700),
-      var(--trust-500)
-    );
-  color: white;
-  font-weight: 800;
-  box-shadow:
-    0 12px 25px rgba(27,92,94,0.2);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  transition: 0.2s;
-}
-
-.primary-button:hover {
-  transform: translateY(-2px);
-  box-shadow:
-    0 16px 30px rgba(27,92,94,0.28);
-}
-
-.primary-button span {
-  font-size: 20px;
-}
-
-.auth-switch {
-  text-align: center;
-  margin-top: 25px;
-  color: #7c918f;
-  font-size: 12px;
-}
-
-.auth-switch button {
-  border: 0;
-  background: transparent;
-  color: var(--trust-600);
-  font-weight: 800;
-  margin-left: 5px;
-}
-
-.error-box,
-.success-box {
-  margin-top: 15px;
-  padding: 11px 13px;
-  border-radius: 10px;
-  font-size: 12px;
-}
-
-.error-box {
-  background: #fff0f0;
-  color: #a44747;
-}
-
-.success-box {
-  background: #e8f8f3;
-  color: #23715f;
-}
-
-.auth-orbit {
-  position: absolute;
-  border: 1px solid rgba(117,211,199,0.08);
-  border-radius: 50%;
-}
-
-.orbit-one {
-  width: 600px;
-  height: 600px;
-  left: -330px;
-  bottom: -350px;
-}
-
-.orbit-two {
-  width: 900px;
-  height: 900px;
-  right: -600px;
-  top: -550px;
-}
-
-
-/* =========================
-   APP
-========================= */
-
-.app-shell {
-  min-height: 100vh;
-  display: flex;
-  background: var(--paper);
-}
-
-.sidebar {
-  width: 255px;
-  min-height: 100vh;
-  padding: 30px 18px;
-  background: var(--trust-950);
-  color: white;
-  display: flex;
-  flex-direction: column;
-  position: fixed;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  z-index: 10;
-}
-
-.sidebar-brand {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  padding: 0 10px 35px;
-}
-
-.sidebar-brand strong,
-.sidebar-brand small {
-  display: block;
-}
-
-.sidebar-brand strong {
-  font-size: 17px;
-}
-
-.sidebar-brand small {
-  color: #587572;
-  font-size: 9px;
-  margin-top: 3px;
-}
-
-.sidebar nav {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.nav-item {
-  border: 0;
-  background: transparent;
-  color: #7c9996;
-  padding: 14px 13px;
-  border-radius: 12px;
-  text-align: left;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 12px;
-  transition: 0.2s;
-}
-
-.nav-item span {
-  width: 18px;
-  text-align: center;
-  font-size: 16px;
-}
-
-.nav-item b {
-  margin-left: auto;
-  font-size: 9px;
-  color: #5c7774;
-}
-
-.nav-item:hover {
-  color: white;
-  background: rgba(255,255,255,0.04);
-}
-
-.nav-item.active {
-  color: var(--trust-mint);
-  background:
-    linear-gradient(
-      90deg,
-      rgba(57,170,165,0.15),
-      transparent
-    );
-}
-
-.nav-item.active span {
-  color: var(--trust-300);
-}
-
-.sidebar-trust {
-  margin-top: auto;
-  padding: 16px 12px;
-  border: 1px solid rgba(117,211,199,0.1);
-  border-radius: 16px;
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  background: rgba(255,255,255,0.025);
-}
-
-.sidebar-trust-ring {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  color: var(--trust-300);
-  background: rgba(57,170,165,0.12);
-}
-
-.sidebar-trust strong,
-.sidebar-trust span {
-  display: block;
-}
-
-.sidebar-trust strong {
-  font-size: 11px;
-}
-
-.sidebar-trust span {
-  margin-top: 3px;
-  color: #587572;
-  font-size: 8px;
-}
-
-.logout-button {
-  margin-top: 13px;
-  border: 0;
-  background: transparent;
-  color: #5e7774;
-  padding: 12px;
-  text-align: left;
-  font-size: 11px;
-}
-
-.logout-button:hover {
-  color: #d98c8c;
-}
-
-
-/* =========================
-   MAIN
-========================= */
-
-.main-content {
-  margin-left: 255px;
-  width: calc(100% - 255px);
-  min-height: 100vh;
-}
-
-.topbar {
-  height: 145px;
-  padding: 36px 5vw;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid #e2ece9;
-  background: rgba(245,250,248,0.9);
-  backdrop-filter: blur(12px);
-  position: sticky;
-  top: 0;
-  z-index: 5;
-}
-
-.topbar-label {
-  color: var(--trust-500);
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: 2px;
-}
-
-.topbar h1 {
-  margin: 8px 0 0;
-  font-size: 31px;
-  letter-spacing: -1.5px;
-}
-
-.profile {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.avatar {
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: var(--trust-800);
-  color: var(--trust-mint);
-  font-weight: 800;
-}
-
-.profile strong,
-.profile span {
-  display: block;
-}
-
-.profile strong {
-  font-size: 11px;
-}
-
-.profile span {
-  margin-top: 3px;
-  color: var(--muted);
-  font-size: 9px;
-}
-
-.content {
-  padding: 38px 5vw 70px;
-  max-width: 1400px;
-}
-
-
-/* =========================
-   ALERTS
-========================= */
-
-.global-error,
-.global-success {
-  margin: 20px 5vw 0;
-  padding: 13px 15px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 12px;
-}
-
-.global-error {
-  background: #fff0f0;
-  color: #a44747;
-}
-
-.global-success {
-  background: #e7f7f1;
-  color: #23715f;
-}
-
-.global-error button,
-.global-success button {
-  margin-left: auto;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font-size: 18px;
-}
-
-
-/* =========================
-   WELCOME
-========================= */
-
-.welcome-grid {
-  display: grid;
-  grid-template-columns: 1.4fr 0.8fr;
-  gap: 18px;
-}
-
-.welcome-card {
-  min-height: 300px;
-  padding: 38px;
-  border-radius: var(--radius);
-  color: white;
-  background:
-    radial-gradient(
-      circle at 90% 20%,
-      rgba(117,211,199,0.18),
-      transparent 30%
-    ),
-    linear-gradient(
-      135deg,
-      var(--trust-950),
-      var(--trust-800)
-    );
-  position: relative;
-  overflow: hidden;
-}
-
-.welcome-card::after {
-  content: "";
-  position: absolute;
-  width: 270px;
-  height: 270px;
-  border-radius: 50%;
-  border: 1px solid rgba(117,211,199,0.1);
-  right: -100px;
-  bottom: -130px;
-}
-
-.welcome-eyebrow {
-  color: var(--trust-300);
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: 2px;
-}
-
-.welcome-card h2 {
-  max-width: 650px;
-  margin: 16px 0 12px;
-  font-size: 38px;
-  letter-spacing: -2px;
-  line-height: 1.05;
-}
-
-.welcome-card h2 span {
-  color: var(--trust-300);
-}
-
-.welcome-card p {
-  max-width: 520px;
-  color: #91aaa7;
-  font-size: 12px;
-  line-height: 1.7;
-}
-
-.upload-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin-top: 20px;
-  padding: 13px 17px;
-  border-radius: 11px;
-  background: var(--trust-mint);
-  color: var(--trust-950);
-  font-size: 11px;
-  font-weight: 900;
-  cursor: pointer;
-  transition: 0.2s;
-}
-
-.upload-button:hover {
-  transform: translateY(-2px);
-}
-
-.upload-button input {
-  display: none;
-}
-
-.upload-button.compact {
-  margin-top: 0;
-}
-
-
-/* =========================
-   TRUST CARD
-========================= */
-
-.trust-card {
-  min-height: 300px;
-  padding: 30px;
-  border-radius: var(--radius);
-  border: 1px solid #dce9e6;
-  background: white;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-}
-
-.trust-ring-large {
-  width: 145px;
-  height: 145px;
-  border-radius: 50%;
-  padding: 9px;
-  background:
-    conic-gradient(
-      var(--trust-400) 0deg,
-      var(--trust-300) 290deg,
-      #e5efec 290deg
-    );
-  display: grid;
-  place-items: center;
-}
-
-.ring-inner {
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  background: var(--trust-950);
-  display: grid;
-  place-content: center;
-}
-
-.ring-inner strong {
-  color: white;
-  font-size: 25px;
-}
-
-.ring-inner span {
-  margin-top: 3px;
-  color: var(--trust-300);
-  font-size: 7px;
-  letter-spacing: 2px;
-}
-
-.trust-card-copy {
-  margin-top: 18px;
-}
-
-.trust-card-copy > span {
-  color: var(--trust-500);
-  font-size: 8px;
-  font-weight: 900;
-  letter-spacing: 2px;
-}
-
-.trust-card-copy h3 {
-  margin: 6px 0 3px;
-  font-size: 14px;
-}
-
-.trust-card-copy p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 10px;
-}
-
-
-/* =========================
-   STATS
-========================= */
-
-.stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
-  margin: 18px 0 38px;
-}
-
-.stat-card {
-  padding: 19px;
-  border-radius: 17px;
-  background: white;
-  border: 1px solid #e0ebe8;
-  display: flex;
-  align-items: center;
-  gap: 13px;
-}
-
-.stat-icon {
-  width: 38px;
-  height: 38px;
-  border-radius: 11px;
-  display: grid;
-  place-items: center;
-  background: #e8f6f2;
-  color: var(--trust-600);
-  font-size: 16px;
-}
-
-.stat-card span,
-.stat-card strong {
-  display: block;
-}
-
-.stat-card span {
-  color: var(--muted);
-  font-size: 8px;
-  font-weight: 900;
-  letter-spacing: 1.3px;
-}
-
-.stat-card strong {
-  margin-top: 4px;
-  font-size: 17px;
-}
-
-
-/* =========================
-   SECTION
-========================= */
-
-.section-heading {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  margin-bottom: 15px;
-}
-
-.section-heading span {
-  color: var(--trust-500);
-  font-size: 8px;
-  font-weight: 900;
-  letter-spacing: 2px;
-}
-
-.section-heading h2 {
-  margin: 5px 0 0;
-  font-size: 21px;
-  letter-spacing: -0.7px;
-}
-
-.section-heading button {
-  border: 0;
-  background: transparent;
-  color: var(--trust-600);
-  font-size: 11px;
-  font-weight: 800;
-}
-
-
-/* =========================
-   FILES
-========================= */
-
-.file-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 15px;
-}
-
-.file-card {
-  padding: 21px;
-  border-radius: 18px;
-  background: white;
-  border: 1px solid #e0ebe8;
-  transition: 0.2s;
-}
-
-.file-card:hover {
-  transform: translateY(-3px);
-  border-color: #b9d9d3;
-  box-shadow:
-    0 14px 30px rgba(16,38,40,0.07);
-}
-
-.file-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.pdf-icon {
-  width: 43px;
-  height: 50px;
-  border-radius: 9px;
-  display: grid;
-  place-items: center;
-  background:
-    linear-gradient(
-      145deg,
-      #e9f7f3,
-      #d4eee8
-    );
-  color: var(--trust-600);
-  font-size: 8px;
-  font-weight: 900;
-  letter-spacing: 1px;
-}
-
-.file-menu {
-  color: var(--trust-500);
-  font-size: 7px;
-  font-weight: 900;
-  letter-spacing: 1.5px;
-}
-
-.file-card h3 {
-  margin: 20px 0 7px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: 13px;
-}
-
-.file-meta {
-  display: flex;
-  gap: 7px;
-  color: #91a3a1;
-  font-size: 9px;
-}
-
-.file-actions {
-  display: flex;
-  gap: 7px;
-  margin-top: 20px;
-}
-
-.download-button {
-  flex: 1;
-  min-height: 38px;
-  border: 0;
-  border-radius: 9px;
-  background: var(--trust-950);
-  color: white;
-  padding: 0 12px;
-  font-size: 9px;
-  font-weight: 800;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.download-button span {
-  color: var(--trust-300);
-  font-size: 14px;
-}
-
-.icon-action {
-  width: 39px;
-  border: 0;
-  border-radius: 9px;
-  font-size: 15px;
-}
-
-.share-action {
-  color: var(--trust-600);
-  background: #e8f6f2;
-}
-
-.delete-action {
-  color: #a95151;
-  background: #fff0f0;
-}
-
-
-/* =========================
-   PAGE ACTION
-========================= */
-
-.page-action-row {
-  min-height: 70px;
-  margin-bottom: 22px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.page-action-row p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 11px;
-}
-
-
-/* =========================
-   SHARED
-========================= */
-
-.shared-banner {
-  margin-bottom: 22px;
-  padding: 25px;
-  border-radius: 20px;
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  background:
-    linear-gradient(
-      110deg,
-      #e3f6f1,
-      #f9fcfb
-    );
-  border: 1px solid #d2eae4;
-}
-
-.shared-symbol {
-  width: 55px;
-  height: 55px;
-  border-radius: 15px;
-  display: grid;
-  place-items: center;
-  color: white;
-  background: var(--trust-800);
-  font-size: 23px;
-}
-
-.shared-banner span {
-  color: var(--trust-500);
-  font-size: 8px;
-  font-weight: 900;
-  letter-spacing: 2px;
-}
-
-.shared-banner h2 {
-  margin: 5px 0;
-  font-size: 20px;
-}
-
-.shared-banner p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 10px;
-}
-
-.shared-tag {
-  padding: 5px 8px;
-  border-radius: 999px;
-  color: var(--trust-600);
-  background: #e7f6f1;
-  font-size: 7px;
-  font-weight: 900;
-  letter-spacing: 1px;
-}
-
-.shared-file .download-button {
-  margin-top: 19px;
-}
-
-
-/* =========================
-   SHARE
-========================= */
-
-.share-layout {
-  display: grid;
-  grid-template-columns: 1fr 0.85fr;
-  gap: 20px;
-}
-
-.share-visual {
-  min-height: 560px;
-  border-radius: 25px;
-  padding: 45px;
-  color: white;
-  background:
-    radial-gradient(
-      circle at 50% 28%,
-      rgba(117,211,199,0.2),
-      transparent 27%
-    ),
-    var(--trust-950);
-  position: relative;
-  overflow: hidden;
-}
-
-.share-orbit {
-  position: absolute;
-  width: 320px;
-  height: 320px;
-  border-radius: 50%;
-  border: 1px solid rgba(117,211,199,0.13);
-  top: 70px;
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-.share-orbit::after {
-  content: "";
-  position: absolute;
-  inset: 38px;
-  border-radius: 50%;
-  border: 1px dashed rgba(117,211,199,0.12);
-}
-
-.share-core {
-  width: 90px;
-  height: 90px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  position: absolute;
-  top: 185px;
-  left: 50%;
-  transform: translateX(-50%);
-  background:
-    linear-gradient(
-      145deg,
-      var(--trust-300),
-      var(--trust-500)
-    );
-  color: var(--trust-950);
-  font-size: 34px;
-  font-weight: 900;
-  box-shadow:
-    0 0 55px rgba(117,211,199,0.25);
-}
-
-.share-copy {
-  position: absolute;
-  bottom: 45px;
-  left: 45px;
-  right: 45px;
-}
-
-.share-copy span {
-  color: var(--trust-300);
-  font-size: 8px;
-  font-weight: 900;
-  letter-spacing: 2px;
-}
-
-.share-copy h2 {
-  margin: 10px 0;
-  font-size: 37px;
-  line-height: 1;
-  letter-spacing: -2px;
-}
-
-.share-copy p {
-  max-width: 420px;
-  color: #7e9c99;
-  font-size: 11px;
-  line-height: 1.7;
-}
-
-.share-form-card {
-  padding: 38px;
-  border-radius: 25px;
-  background: white;
-  border: 1px solid #e0ebe8;
-}
-
-.form-heading > span {
-  color: var(--trust-500);
-  font-size: 8px;
-  font-weight: 900;
-  letter-spacing: 2px;
-}
-
-.secure-note {
-  display: flex;
-  gap: 11px;
-  margin-top: 22px;
-  padding: 13px;
-  border-radius: 12px;
-  background: #eff9f6;
-}
-
-.secure-note > span {
-  width: 28px;
-  height: 28px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: #d7f1ea;
-  color: var(--trust-600);
-  font-weight: 900;
-}
-
-.secure-note strong {
-  font-size: 10px;
-}
-
-.secure-note p {
-  margin: 3px 0 0;
-  color: var(--muted);
-  font-size: 8px;
-}
-
-.back-button {
-  width: 100%;
-  margin-top: 13px;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  padding: 10px;
-  font-size: 10px;
-}
-
-
-/* =========================
-   EMPTY
-========================= */
-
-.empty-state {
-  grid-column: 1 / -1;
-  min-height: 280px;
-  border: 1px dashed #cbdeda;
-  border-radius: 20px;
-  background: rgba(255,255,255,0.5);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-}
-
-.empty-icon {
-  width: 62px;
-  height: 62px;
-  border-radius: 20px;
-  display: grid;
-  place-items: center;
-  color: var(--trust-600);
-  background: #e8f6f2;
-  font-size: 25px;
-}
-
-.empty-state h2 {
-  margin: 15px 0 6px;
-  font-size: 17px;
-}
-
-.empty-state p {
-  max-width: 350px;
-  margin: 0;
-  color: var(--muted);
-  font-size: 10px;
-  line-height: 1.6;
-}
-
-
-/* =========================
-   RESPONSIVE
-========================= */
-
-@media (max-width: 1050px) {
-
-  .auth-page {
-    grid-template-columns: 1fr;
-  }
-
-  .auth-left {
-    display: none;
-  }
-
-  .auth-right {
-    min-height: 100vh;
-    border: 0;
-  }
-
-  .welcome-grid,
-  .share-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .file-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-}
-
-@media (max-width: 750px) {
-
-  .sidebar {
-    width: 72px;
-    padding: 20px 10px;
-  }
-
-  .sidebar-brand > div:last-child,
-  .nav-item:not(.active)::after,
-  .sidebar-trust,
-  .logout-button {
-    font-size: 0;
-  }
-
-  .sidebar-brand {
-    justify-content: center;
-    padding: 0 0 25px;
-  }
-
-  .sidebar-brand small,
-  .sidebar-brand strong {
-    display: none;
-  }
-
-  .nav-item {
-    justify-content: center;
-    padding: 14px 5px;
-  }
-
-  .nav-item b {
-    display: none;
-  }
-
-  .main-content {
-    margin-left: 72px;
-    width: calc(100% - 72px);
-  }
-
-  .topbar {
-    height: auto;
-    min-height: 110px;
-    padding: 25px 22px;
-  }
-
-  .topbar h1 {
-    font-size: 23px;
-  }
-
-  .profile > div:last-child {
-    display: none;
-  }
-
-  .content {
-    padding: 25px 18px 50px;
-  }
-
-  .stats {
-    grid-template-columns: 1fr;
-  }
-
-  .file-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .welcome-card h2 {
-    font-size: 30px;
-  }
-
-  .share-visual {
-    min-height: 450px;
-  }
-
-  .share-form-card {
-    padding: 25px;
-  }
-
-  .page-action-row {
-    align-items: flex-start;
-    gap: 15px;
-  }
-
-  .auth-card {
-    padding: 27px;
-  }
-
-}
-`;
 
 export default App;

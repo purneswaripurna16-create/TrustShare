@@ -15,6 +15,22 @@ class FileShare(Base):
 
     recipient_email = Column(String, nullable=False)
 
+    permission = Column(
+        String,
+        nullable=False,
+        default="read"
+    )
+
+    expires_at = Column(
+        DateTime,
+        nullable=True
+    )
+    share_token = Column(
+    String,
+    unique=True,
+    nullable=True
+    )
+
     created_at = Column(
         DateTime,
         default=datetime.utcnow

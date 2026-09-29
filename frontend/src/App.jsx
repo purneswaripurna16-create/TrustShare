@@ -56,6 +56,7 @@ function App() {
       ? "reset-password"
       : "login"
   );
+  
 
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -67,6 +68,17 @@ function App() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  const unreadNotifications = notifications.filter(
+    (notification) => notification.is_read === false
+  ).length;
+
+  const [activities, setActivities] = useState([]);
+  const [securityStatus, setSecurityStatus] = useState(null);
+  const [analytics, setAnalytics] = useState(null);
+  const [reportFilter, setReportFilter] = useState("ALL");
 
   // =========================================================
   // FILE STATE
@@ -88,6 +100,14 @@ function App() {
 
   // Current email input
   const [recipientEmail, setRecipientEmail] = useState("");
+  
+
+
+  
+
+  
+
+   
 
   
 
@@ -101,7 +121,7 @@ function App() {
   const [updateFile, setUpdateFile] = useState(null);
   // Temporary share state
   const [temporaryShareFile, setTemporaryShareFile] = useState("");
-  const [temporaryExpiryMinutes, setTemporaryExpiryMinutes] = useState(60);
+  const [temporaryExpiryHours, setTemporaryExpiryHours] = useState(1);
   const [temporaryShareResult, setTemporaryShareResult] = useState(null);
 
   // =========================================================
@@ -164,6 +184,157 @@ function App() {
       );
     }
   };
+  // =========================================================
+// MILESTONE 3 - LOAD NOTIFICATIONS
+// =========================================================
+
+const loadNotifications = async () => {
+  try {
+    const token =
+      localStorage.getItem("access_token");
+
+    if (!token) return;
+
+    const response = await fetch(
+      `${API}/notifications`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!response.ok) return;
+
+    const data = await response.json();
+
+    const normalizedNotifications = (
+      data.notifications || []
+    ).map((notification) => ({
+      ...notification,
+      is_read:
+        notification.is_read === true ||
+        notification.is_read === "true",
+    }));
+
+    setNotifications(normalizedNotifications);
+    console.log(
+      "UNREAD COUNT:",
+      normalizedNotifications.filter(
+        (notification) => notification.is_read === false
+      ).length
+    );
+  } catch (error) {
+    console.error(
+      "Failed to load notifications:",
+      error
+    );
+  }
+};
+// =========================================================
+// MILESTONE 3 - LOAD ACTIVITY
+// =========================================================
+
+const loadActivities = async () => {
+  try {
+    const token =
+      localStorage.getItem("access_token");
+
+    if (!token) return;
+
+    const response = await fetch(
+      `${API}/activity?limit=100`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!response.ok) return;
+
+    const data = await response.json();
+
+    setActivities(
+      data.activities || []
+    );
+
+  } catch (error) {
+    console.error(
+      "Failed to load activities:",
+      error
+    );
+  }
+};
+// =========================================================
+// MILESTONE 3 - SECURITY MONITORING
+// =========================================================
+const loadSecurityStatus = async () => {
+  try {
+    const token =
+      localStorage.getItem("access_token");
+
+    if (!token) return;
+
+    const response = await fetch(
+      `${API}/security/check`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!response.ok) return;
+
+    const data = await response.json();
+
+    setSecurityStatus(data);
+
+    // Refresh notifications after security check
+    await loadNotifications();
+
+  } catch (error) {
+    console.error(
+      "Failed to load security status:",
+      error
+    );
+  }
+};
+   
+// =========================================================
+// MILESTONE 3 - LOAD ANALYTICS
+// =========================================================
+
+const loadAnalytics = async () => {
+  try {
+    const token =
+      localStorage.getItem("access_token");
+
+    if (!token) return;
+
+    const response = await fetch(
+      `${API}/analytics`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!response.ok) return;
+
+    const data = await response.json();
+
+    setAnalytics(data);
+
+  } catch (error) {
+    console.error(
+      "Failed to load analytics:",
+      error
+    );
+  }
+};
 
   // =========================================================
   // LOAD SHARED WITH ME FILES
@@ -252,12 +423,35 @@ function App() {
   // =========================================================
 
   useEffect(() => {
-    if (page === "dashboard" && token) {
-      loadFiles(token);
-      loadSharedWithMeFiles(token);
-      loadSharedByMeFiles(token);
-    }
-  }, [page, token]);
+  if (
+  (page === "dashboard" || page === "activity") &&
+  token
+) {
+    loadFiles(token);
+    loadSharedWithMeFiles(token);
+    loadSharedByMeFiles(token);
+    loadActivities();
+    loadAnalytics();
+
+    const refreshSecurityAndNotifications = async () => {
+      await loadSecurityStatus();
+      await loadNotifications();
+    };
+
+    // Check immediately when dashboard opens
+    refreshSecurityAndNotifications();
+
+    // Check for new security events and notifications every 3 seconds
+    const notificationInterval = setInterval(
+      refreshSecurityAndNotifications,
+      3000
+    );
+
+    return () => {
+      clearInterval(notificationInterval);
+    };
+  }
+}, [page, token]);
 
   // =========================================================
   // CLOSE PROFILE OUTSIDE CLICK
@@ -796,6 +990,11 @@ function App() {
     setRecipientEmails([]);
 
     setPermission("read");
+    setTemporaryShareFile(filename);
+
+    setTemporaryExpiryHours(1);
+
+    setTemporaryShareResult(null);
 
     setPage("share");
   };
@@ -1047,6 +1246,31 @@ const handleUpdateSharedFile = async (
       setLoading(false);
     }
   };
+  // =========================================================
+// COPY TEMPORARY SHARE LINK
+// =========================================================
+
+const handleCopyTemporaryLink = async () => {
+  if (!temporaryShareResult?.share_token) {
+    setMessage("Temporary share link is not available.");
+    return;
+  }
+
+  const temporaryLink =
+    `${API}/download/shared/${encodeURIComponent(
+      temporaryShareResult.share_token
+    )}`;
+
+  try {
+    await navigator.clipboard.writeText(temporaryLink);
+
+    setMessage("Temporary link copied to clipboard.");
+  } catch (error) {
+    console.error(error);
+
+    setMessage("Unable to copy the temporary link.");
+  }
+};
 
   // =========================================================
   // DELETE MY OWN FILE
@@ -1429,8 +1653,7 @@ const handleUpdateSharedFile = async (
       setMessage("Please select a file.");
       return;
     }
-
-    if (!temporaryExpiryMinutes || temporaryExpiryMinutes <= 0) {
+    if (!temporaryExpiryHours || temporaryExpiryHours <= 0) {
       setMessage("Please enter a valid expiry time.");
       return;
     }
@@ -1445,22 +1668,22 @@ const handleUpdateSharedFile = async (
     setTemporaryShareResult(null);
 
     try {
-      const response = await fetch(
-        `${API}/share/temporary?filename=${encodeURIComponent(
-          temporaryShareFile
-        )}&recipient_email=${encodeURIComponent(
-          recipientEmail.trim()
-        )}&expires_in_minutes=${Number(
-          temporaryExpiryMinutes
-        )}`,
-        {
-          method: "POST",
+        const response = await fetch(
+            `${API}/share/temporary?filename=${encodeURIComponent(
+              temporaryShareFile
+            )}&recipient_email=${encodeURIComponent(
+              recipientEmail.trim()
+            )}&expires_in_minutes=${Number(
+              temporaryExpiryHours
+            ) * 60}`,
+            {
+              method: "POST",
 
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }
+        );
 
       const data = await response.json();
 
@@ -1670,6 +1893,34 @@ const handleUpdateSharedFile = async (
           <span>↗</span>
           Shared By Me
         </button>
+          <button
+            className={
+              page === "activity"
+                ? "nav-item active"
+                : "nav-item"
+            }
+            onClick={() => {
+              setPage("activity");
+              setMessage("");
+            }}
+          >
+            <span>◷</span>
+            Activity
+          </button>
+            <button
+              className={
+                page === "analytics"
+                  ? "nav-item active"
+                  : "nav-item"
+              }
+              onClick={() => {
+                setPage("analytics");
+                setMessage("");
+              }}
+            >
+              <span>▥</span>
+              Analytics
+            </button>
       </div>
 
       <div className="nav-section account-section">
@@ -1726,6 +1977,204 @@ const handleUpdateSharedFile = async (
           <div className="theme-wrapper">
             <ThemeButton />
           </div>
+          <div className="notification-wrapper">
+
+  <button
+  type="button"
+  className="notification-button"
+  onClick={() =>
+    setShowNotifications(!showNotifications)
+  }
+>
+  <span style={{ position: "relative", display: "inline-flex" }}>
+    🔔
+
+    {unreadNotifications > 0 && (
+      <span
+        style={{
+          position: "absolute",
+          top: "-8px",
+          right: "-10px",
+          minWidth: "18px",
+          height: "18px",
+          padding: "0 5px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          borderRadius: "50%",
+          background: "#e53935",
+          color: "#ffffff",
+          fontSize: "10px",
+          fontWeight: "700",
+          lineHeight: "1",
+          border: "2px solid #ffffff",
+          zIndex: 99999,
+        }}
+      >
+        {unreadNotifications}
+      </span>
+    )}
+  </span>
+</button>
+  {showNotifications && (
+    <div className="notification-panel">
+
+      <div className="notification-panel-header">
+        <div>
+          <strong>Notifications</strong>
+          <span className="notification-count">
+            {notifications.length} notification
+            {notifications.length !== 1 ? "s" : ""}
+          </span>
+        </div>
+
+        {unreadNotifications > 0 && (
+          <button
+            type="button"
+            className="text-button"
+            onClick={async () => {
+              const token =
+                localStorage.getItem("access_token");
+
+              await fetch(
+                `${API}/notifications/read-all`,
+                {
+                  method: "PUT",
+                  headers: {
+                    Authorization:
+                      `Bearer ${token}`,
+                  },
+                }
+              );
+
+              loadNotifications();
+            }}
+          >
+            Mark all read
+          </button>
+        )}
+      </div>
+
+      <div className="notification-list">
+
+        {notifications.length === 0 ? (
+          <div className="notification-empty">
+            <div className="notification-empty-icon">
+              ✓
+            </div>
+
+            <strong>No notifications</strong>
+
+            <span>
+              You're all caught up.
+            </span>
+          </div>
+        ) : (
+          notifications.map((notification) => (
+            <div
+              className={
+                notification.is_read
+                  ? "notification-item read"
+                  : "notification-item"
+              }
+              key={notification.id}
+            >
+
+              <div className="notification-item-top">
+
+                <div
+                  className={
+                    notification.notification_type ===
+                    "SECURITY_ALERT"
+                      ? "notification-icon security"
+                      : "notification-icon"
+                  }
+                >
+                  {notification.notification_type ===
+                  "SECURITY_ALERT"
+                    ? "!"
+                    : "✓"}
+                </div>
+
+                <div className="notification-content">
+
+                  <strong>
+                    {notification.title}
+                  </strong>
+
+                  <p>
+                    {notification.message}
+                  </p>
+
+                  <small>
+                  {notification.created_at
+                    ? (() => {
+                        const timestamp = notification.created_at;
+
+                        const utcTimestamp = timestamp.endsWith("Z")
+                          ? timestamp
+                          : timestamp + "Z";
+
+                        const date = new Date(utcTimestamp);
+
+                        return new Intl.DateTimeFormat("en-GB", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          second: "2-digit",
+                          hour12: false,
+                        }).format(date);
+                      })()
+                    : ""}
+                </small>
+
+                </div>
+
+              </div>
+
+              {!notification.is_read && (
+                <button
+                  type="button"
+                  className="notification-read-button"
+                  onClick={async () => {
+                    const token =
+                      localStorage.getItem(
+                        "access_token"
+                      );
+
+                    await fetch(
+                      `${API}/notifications/${notification.id}/read`,
+                      {
+                        method: "PUT",
+                        headers: {
+                          Authorization:
+                            `Bearer ${token}`,
+                        },
+                      }
+                    );
+
+                    loadNotifications();
+                  }}
+                >
+                  Mark as read
+                </button>
+              )}
+
+            </div>
+          ))
+        )}
+
+      </div>
+    </div>
+  )}
+
+</div>
+            
+
+
+      
 
           <div
             className="profile-wrapper"
@@ -2502,6 +2951,374 @@ const handleUpdateSharedFile = async (
         {page === "dashboard" && (
           <Dashboard />
         )}
+        {/* ===================================================
+    ACTIVITY / AUDIT LOG
+    =================================================== */}
+
+{page === "activity" && (
+  <div className="content-page">
+
+    <div className="page-heading">
+      <div>
+        <span className="eyebrow">
+          SECURITY & AUDIT
+        </span>
+
+        <h1>
+          Activity
+        </h1>
+
+        <p>
+          View your recent account and file activity.
+        </p>
+      </div>
+    </div>
+
+
+    <div className="security-card activity-security-card">
+
+      <div className="security-shield">
+        {securityStatus?.suspicious
+          ? "!"
+          : "✓"}
+      </div>
+
+      <span className="eyebrow">
+        SECURITY MONITORING
+      </span>
+
+      <h2>
+        {securityStatus?.suspicious
+          ? "Suspicious activity detected"
+          : "No suspicious activity detected"}
+      </h2>
+
+      <p>
+        {securityStatus
+          ? securityStatus.message
+          : "Checking your recent account activity..."}
+      </p>
+
+      {securityStatus && (
+        <div className="security-status">
+          <span></span>
+
+          {securityStatus.failed_login_count} failed login attempt(s)
+          in the last{" "}
+          {securityStatus.time_window_minutes} minutes
+        </div>
+      )}
+
+    </div>
+
+
+    <div className="activity-filters">
+
+      {[
+        "ALL",
+        "UPLOADS",
+        "DOWNLOADS",
+        "SHARES",
+        "SECURITY",
+      ].map((filter) => (
+        <button
+          key={filter}
+          className={
+            reportFilter === filter
+              ? "activity-filter-button active"
+              : "activity-filter-button"
+          }
+          onClick={() =>
+            setReportFilter(filter)
+          }
+        >
+          {filter}
+        </button>
+      ))}
+
+    </div>
+
+
+    <div className="activity-list">
+
+      {(() => {
+        console.log(
+              "ACTIVITY ACTIONS:",
+              activities.map((activity) => activity.action)
+            );
+
+        const filteredActivities =
+          activities.filter((activity) => {
+            
+
+            if (reportFilter === "ALL") {
+              return true;
+            }
+
+            if (reportFilter === "UPLOADS") {
+              return (
+                activity.action ===
+                "FILE_UPLOADED"
+              );
+            }
+
+            if (reportFilter === "DOWNLOADS") {
+              return (
+                activity.action ===
+                  "FILE_DOWNLOADED" ||
+                activity.action ===
+                  "TEMPORARY_LINK_DOWNLOADED"
+              );
+            }
+
+            if (reportFilter === "SHARES") {
+              return (
+                activity.action === "FILE_SHARED" ||
+                activity.action === "PERMISSION_CHANGED" ||
+                activity.action === "SHARE_REVOKED" ||
+                activity.action === "TEMPORARY_LINK_CREATED"
+              );
+            }
+
+            if (reportFilter === "SECURITY") {
+              return (
+                activity.action ===
+                  "LOGIN_SUCCESS" ||
+                activity.action ===
+                  "LOGIN_FAILED"
+              );
+            }
+
+            return true;
+          });
+
+        if (filteredActivities.length === 0) {
+          return (
+            <div className="empty-state">
+              <div className="empty-icon">
+                ◷
+              </div>
+
+              <h3>
+                No activity found
+              </h3>
+
+              <p>
+                No activity matches the selected report filter.
+              </p>
+            </div>
+          );
+        }
+
+        return filteredActivities.map(
+          (activity) => (
+            <div
+              className="activity-item"
+              key={activity.id}
+            >
+
+              <div className="activity-icon">
+                ◷
+              </div>
+
+              <div className="activity-details">
+
+                <strong>
+                  {activity.action}
+                </strong>
+
+                {activity.filename && (
+                  <p>
+                    File: {activity.filename}
+                  </p>
+                )}
+
+                {activity.details && (
+                  <p>
+                    {activity.details}
+                  </p>
+                )}
+
+                <small>
+                  {activity.created_at
+                    ? (() => {
+                        const timestamp = activity.created_at;
+
+                        const utcTimestamp = timestamp.endsWith("Z")
+                          ? timestamp
+                          : timestamp + "Z";
+
+                        const date = new Date(utcTimestamp);
+
+                        return new Intl.DateTimeFormat("en-GB", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          second: "2-digit",
+                          hour12: false,
+                        }).format(date);
+                      })()
+                    : ""}
+                </small>
+                     
+
+              </div>
+
+            </div>
+          )
+        );
+
+      })()}
+
+    </div>
+
+  </div>
+)}
+      
+
+
+
+{page === "analytics" && (
+  <div className="content-page">
+    <div className="page-heading">
+      <div>
+        <span className="eyebrow">
+          REPORTING
+        </span>
+
+        <h1>
+          Analytics
+        </h1>
+
+        <p>
+          Monitor your TrustShare usage and activity.
+        </p>
+      </div>
+    </div>
+
+    {!analytics ? (
+      <div className="empty-state">
+        <h3>
+          Loading analytics...
+        </h3>
+      </div>
+    ) : (
+      <div className="stats-grid">
+
+        <div className="stat-card">
+          <div className="stat-icon">
+            ▣
+          </div>
+
+          <div>
+            <span>
+              File uploads
+            </span>
+
+            <strong>
+              {analytics.total_uploads}
+            </strong>
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-icon">
+            ↓
+          </div>
+
+          <div>
+            <span>
+              Downloads
+            </span>
+
+            <strong>
+              {analytics.total_downloads}
+            </strong>
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-icon">
+            ⇄
+          </div>
+
+          <div>
+            <span>
+              Shares
+            </span>
+
+            <strong>
+              {analytics.total_shares}
+            </strong>
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-icon">
+            ×
+          </div>
+
+          <div>
+            <span>
+              Deletes
+            </span>
+
+            <strong>
+              {analytics.total_deletes}
+            </strong>
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-icon">
+            ◷
+          </div>
+
+          <div>
+            <span>
+              Total activity
+            </span>
+
+            <strong>
+              {analytics.total_activities}
+            </strong>
+          </div>
+        </div>
+        <div className="stat-card">
+  <div className="stat-icon">▤</div>
+  <div>
+    <span>Storage used</span>
+    <strong>
+      {analytics.storage_used_bytes
+        ? `${(
+            analytics.storage_used_bytes /
+            (1024 * 1024)
+          ).toFixed(2)} MB`
+        : "0 MB"}
+    </strong>
+  </div>
+</div>
+
+<div className="stat-card">
+  <div className="stat-icon">▣</div>
+  <div>
+    <span>Stored files</span>
+    <strong>
+      {analytics.stored_file_count}
+    </strong>
+  </div>
+</div>
+
+      </div>
+    )}
+  </div>
+)}
+      
+            
+        
+
 
         {/* MY FILES */}
 
@@ -3026,18 +3843,18 @@ const handleUpdateSharedFile = async (
                 </select>
 
                 <label>
-                  Expires in (minutes)
-                </label>
+                    Expires in (hours)
+                  </label>
 
-                <input
-                  className="input"
-                  type="number"
-                  min="1"
-                  value={temporaryExpiryMinutes}
-                  onChange={(e) =>
-                    setTemporaryExpiryMinutes(e.target.value)
-                  }
-                />
+                  <input
+                    className="input"
+                    type="number"
+                    min="1"
+                    value={temporaryExpiryHours}
+                    onChange={(e) =>
+                      setTemporaryExpiryHours(e.target.value)
+                    }
+                  />
 
                 <button
                   className="auth-button"
@@ -3097,15 +3914,32 @@ const handleUpdateSharedFile = async (
                       </div>
                     </div>
 
-                    <button
-                      className="auth-button"
-                      onClick={handleTemporaryDownload}
-                      disabled={loading}
-                    >
-                      {loading
-                        ? "Downloading..."
-                        : "Download Temporary File"}
-                    </button>
+                    <div
+  style={{
+    display: "flex",
+    flexDirection: "column",
+    gap: "12px",
+    marginTop: "12px",
+  }}
+>
+  <button
+    type="button"
+    className="auth-button"
+    onClick={handleCopyTemporaryLink}
+  >
+    Copy link
+  </button>
+
+  <button
+    className="auth-button"
+    onClick={handleTemporaryDownload}
+    disabled={loading}
+  >
+    {loading
+      ? "Downloading..."
+      : "Download Temporary File"}
+  </button>
+</div>
                   </div>
                 )}
               </div>
@@ -3383,7 +4217,7 @@ const handleUpdateSharedFile = async (
                               )
                             }
                           >
-                            Delete
+                            Revoke Access
                           </button>
                         </div>
                       </div>

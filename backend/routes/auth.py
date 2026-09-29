@@ -5,7 +5,9 @@ from database.connection import engine
 from models.user import User
 from passlib.context import CryptContext
 from auth_utils import create_access_token, verify_access_token
+from activity_logger import log_activity
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from notification_logger import create_notification
 
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 from pydantic_settings import BaseSettings
@@ -133,17 +135,23 @@ class LoginRequest(BaseModel):
     email: str
     password: str
 
-
 @router.post("/login")
 def login(user: LoginRequest):
-
     db = Session(bind=engine)
 
     existing_user = db.query(User).filter(
         User.email == user.email
     ).first()
 
+    # Email not found
     if not existing_user:
+        log_activity(
+            action="LOGIN_FAILED",
+            user_id=None,
+            user_email=user.email,
+            details="Login failed: email not found"
+        )
+
         db.close()
 
         raise HTTPException(
@@ -151,12 +159,25 @@ def login(user: LoginRequest):
             detail="Invalid email or password"
         )
 
-    password_correct = pwd_context.verify(
+    # Password incorrect
+    if not pwd_context.verify(
         user.password,
         existing_user.password
-    )
+    ):
+        log_activity(
+            action="LOGIN_FAILED",
+            user_id=existing_user.id,
+            user_email=existing_user.email,
+            details="Login failed: incorrect password"
+        )
 
-    if not password_correct:
+        create_notification(
+            user_id=existing_user.id,
+            title="Login Failed",
+            message="A failed login attempt was detected for your account.",
+            notification_type="SECURITY_ALERT"
+        )
+
         db.close()
 
         raise HTTPException(
@@ -164,20 +185,35 @@ def login(user: LoginRequest):
             detail="Invalid email or password"
         )
 
-    access_token = create_access_token({
-        "user_id": existing_user.id,
-        "email": existing_user.email
-    })
+    # Login successful
+    access_token = create_access_token(
+        data={
+            "user_id": existing_user.id,
+            "email": existing_user.email
+        }
+    )
+
+    log_activity(
+        action="LOGIN_SUCCESS",
+        user_id=existing_user.id,
+        user_email=existing_user.email,
+        details="User logged in successfully"
+    )
+
+    username = existing_user.username
+    email = existing_user.email
 
     db.close()
 
     return {
         "message": "Login successful",
         "access_token": access_token,
-        "username": existing_user.username,
-        "email": existing_user.email
+        "username": username,
+        "email": email
     }
 
+
+       
 
 # =========================================================
 # CURRENT USER

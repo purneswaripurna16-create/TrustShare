@@ -38,11 +38,20 @@ from database.connection import engine, Base
 from models.user import User
 from models.file import File as FileModel
 from models.file_share import FileShare
+from models.activity_log import ActivityLog
+from models.notification import Notification
+from notification_logger import create_notification
+
+from activity_logger import log_activity
 
 
 from routes.test_route import router
 from routes.auth import router as auth_router
 from routes.share import router as share_router
+from routes.activity import router as activity_router
+from routes.security import router as security_router
+from routes.notifications import router as notifications_router
+from routes.analytics import router as analytics_router
 
 from auth_utils import verify_access_token
 
@@ -81,6 +90,10 @@ app.add_middleware(
 app.include_router(router)
 app.include_router(auth_router)
 app.include_router(share_router)
+app.include_router(activity_router)
+app.include_router(security_router)
+app.include_router(notifications_router)
+app.include_router(analytics_router)
 
 
 # =========================
@@ -225,6 +238,14 @@ async def upload_file(
 
             db.add(new_file)
             db.commit()
+            log_activity(
+                action="FILE_UPLOADED",
+                user_id=current_user["user_id"],
+                user_email=current_user["email"],
+                filename=file.filename,
+                details="File uploaded and encrypted successfully"
+            )
+    
 
     finally:
         db.close()
@@ -384,6 +405,13 @@ def download_file(
         # =========================
         # SEND ORIGINAL FILE
         # =========================
+        log_activity(
+            action="FILE_DOWNLOADED",
+            user_id=current_user["user_id"],
+            user_email=current_user["email"],
+            filename=filename,
+            details="File downloaded successfully"
+        )
 
         return StreamingResponse(
             BytesIO(decrypted_data),
@@ -473,6 +501,14 @@ def download_shared_file(token: str):
                 status_code=500,
                 detail="File decryption failed"
             )
+
+        log_activity(
+            action="TEMPORARY_LINK_DOWNLOADED",
+            user_id=None,
+            user_email=shared_file.recipient_email,
+            filename=shared_file.filename,
+            details="Temporary link used successfully"
+        )
 
         # Return decrypted file directly
         return StreamingResponse(
@@ -606,6 +642,13 @@ def delete_file(
         db.delete(file_record)
 
         db.commit()
+        log_activity(
+            action="FILE_DELETED",
+            user_id=current_user["user_id"],
+            user_email=current_user["email"],
+            filename=filename,
+            details="File deleted successfully"
+        )
 
         return {
             "message": "File deleted successfully",
@@ -734,6 +777,23 @@ def create_temporary_share(
                 status_code=404,
                 detail="File not found or you are not the owner"
             )
+        # Check recipient account
+        recipient = db.query(User).filter(
+            User.email == recipient_email
+        ).first()
+
+        if not recipient:
+            raise HTTPException(
+                status_code=404,
+                detail="No TrustShare account found with this email"
+            )
+
+        # Prevent self-sharing
+        if recipient_email == current_user["email"]:
+            raise HTTPException(
+                status_code=400,
+                detail="You cannot create a temporary link for yourself"
+            )
 
         # Check encrypted file exists in Supabase
         storage_path = filename + ".enc"
@@ -767,6 +827,26 @@ def create_temporary_share(
         db.add(new_share)
         db.commit()
         db.refresh(new_share)
+        log_activity(
+            action="TEMPORARY_LINK_CREATED",
+            user_id=current_user["user_id"],
+            user_email=current_user["email"],
+            filename=filename,
+            details=(
+                f"Temporary link created for {recipient_email}; "
+                f"expires at {expires_at}"
+            )
+        )
+        create_notification(
+            user_id=recipient.id,
+            title="Temporary File Link Created",
+            message=(
+                f"{current_user['email']} created a temporary link "
+                f"for '{filename}' for you. "
+                f"The link expires at {expires_at}."
+            ),
+            notification_type="TEMPORARY_LINK"
+        )
 
         return {
             "message": "Temporary share link created successfully",

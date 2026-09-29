@@ -15,3 +15,69 @@ body,
 body {
   margin: 0;
 }
+/* =========================================================
+   TRUSTSHARE ANALYTICS
+   Uses the existing TrustShare design system
+   ========================================================= */
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 24px;
+}
+
+.dashboard-grid .stat-card {
+  min-height: 145px;
+  padding: 22px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.dashboard-grid .stat-card span {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.dashboard-grid .stat-card strong {
+  display: block;
+  font-size: 30px;
+  line-height: 1.1;
+  margin-bottom: 5px;
+}
+
+.dashboard-grid .stat-card small {
+  display: block;
+  font-size: 11px;
+}
+
+/* Analytics icons */
+
+.dashboard-grid .stat-icon {
+  flex-shrink: 0;
+}
+
+/* Second row */
+
+.dashboard-grid .stat-card:nth-child(4),
+.dashboard-grid .stat-card:nth-child(5) {
+  min-width: 0;
+}
+
+/* Smaller screens */
+
+@media (max-width: 900px) {
+  .dashboard-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}

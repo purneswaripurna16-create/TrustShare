@@ -19,6 +19,8 @@ from models.file_share import FileShare
 from models.file import File as FileModel
 from models.user import User
 from auth_utils import verify_access_token
+from activity_logger import log_activity
+from notification_logger import create_notification
 
 from storage import (
     download_encrypted_file,
@@ -168,6 +170,29 @@ def share_file(
         db.add(new_share)
         db.commit()
         db.refresh(new_share)
+        
+
+        create_notification(
+            user_id=recipient.id,
+            title="File Shared With You",
+            message=(
+                f"{current_user['email']} shared "
+                f"'{request.filename}' with you "
+                f"with {request.permission} permission."
+            ),
+            notification_type="FILE_SHARED"
+        )
+
+        log_activity(
+            action="FILE_SHARED",
+            user_id=current_user["user_id"],
+            user_email=current_user["email"],
+            filename=request.filename,
+            details=(
+                f"File shared with {request.recipient_email} "
+                f"with {request.permission} permission"
+            )
+        )
 
         return {
             "message": "File shared successfully",
@@ -235,6 +260,17 @@ def update_share_permission(
 
         db.commit()
         db.refresh(share)
+
+        log_activity(
+            action="PERMISSION_CHANGED",
+            user_id=current_user["user_id"],
+            user_email=current_user["email"],
+            filename=share.filename,
+            details=(
+                f"Permission changed for {share.recipient_email}: "
+                f"{old_permission} -> {share.permission}"
+            )
+        )
 
         return {
             "message": "Share permission updated successfully",
@@ -482,12 +518,21 @@ async def update_shared_file(
         # -------------------------------------------------
         # SUCCESS
         # -------------------------------------------------
+        log_activity(
+            action="SHARED_FILE_UPDATED",
+            user_id=current_user["user_id"],
+            user_email=current_user["email"],
+            filename=filename,
+            details="Shared file content updated successfully"
+        )
 
         return {
             "message": "Shared file updated successfully",
             "filename": filename,
             "permission": share.permission
         }
+
+        
 
     finally:
         db.close()
@@ -522,6 +567,14 @@ def delete_shared_with_me_file(
 
         db.delete(share)
         db.commit()
+
+        log_activity(
+            action="SHARED_FILE_REMOVED",
+            user_id=current_user["user_id"],
+            user_email=current_user["email"],
+            filename=filename,
+            details="Recipient removed the shared file from their account"
+        )
 
         return {
             "message": "File removed successfully",
@@ -558,14 +611,22 @@ def delete_shared_by_me_file(
             )
 
         filename = share.filename
+        recipient_email = share.recipient_email
 
         db.delete(share)
         db.commit()
+
+        log_activity(
+            action="SHARE_REVOKED",
+            user_id=current_user["user_id"],
+            user_email=current_user["email"],
+            filename=filename,
+            details=f"Sharing revoked for {recipient_email}"
+        )
 
         return {
             "message": "Sharing revoked successfully",
             "filename": filename
         }
-
     finally:
         db.close()

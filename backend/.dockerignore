@@ -1,0 +1,15 @@
+cat > backend/.dockerignore <<'EOF'
+venv/
+__pycache__/
+*.pyc
+.env
+uploads/
+encrypted_files/
+keys/
+*.db
+*.sqlite
+*.sqlite3
+.git/
+.gitignore
+Dockerfile
+EOF

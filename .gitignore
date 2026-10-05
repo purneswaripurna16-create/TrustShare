@@ -27,3 +27,6 @@ build/
 # Python cache
 .pytest_cache/
 .mypy_cache/
+
+# Encryption keys
+*.key

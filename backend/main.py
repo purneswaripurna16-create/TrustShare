@@ -52,6 +52,7 @@ from routes.activity import router as activity_router
 from routes.security import router as security_router
 from routes.notifications import router as notifications_router
 from routes.analytics import router as analytics_router
+from routes.ai_security import router as ai_security_router
 
 from auth_utils import verify_access_token
 
@@ -76,7 +77,7 @@ Base.metadata.create_all(bind=engine)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173", "http://localhost:8080"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -94,6 +95,7 @@ app.include_router(activity_router)
 app.include_router(security_router)
 app.include_router(notifications_router)
 app.include_router(analytics_router)
+app.include_router(ai_security_router)
 
 
 # =========================

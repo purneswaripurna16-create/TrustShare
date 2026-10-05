@@ -154,10 +154,35 @@ def share_file(
         ).first()
 
         if existing_share:
-            raise HTTPException(
-                status_code=400,
-                detail="This file has already been shared with this user"
+            # If the same permission is requested, keep the duplicate protection
+            if existing_share.permission == request.permission:
+                raise HTTPException(
+                    status_code=400,
+                    detail="This file has already been shared with this user"
+                )
+
+            # If permission is different, update the existing share
+            old_permission = existing_share.permission
+            existing_share.permission = request.permission
+
+            db.commit()
+            db.refresh(existing_share)
+
+            create_notification(
+                user_id=recipient.id,
+                title="File Permission Updated",
+                message=(
+                    f"{current_user['email']} changed the permission "
+                    f"for {request.filename} from {old_permission} "
+                    f"to {request.permission}"
+                )
             )
+
+            return {
+                "message": "File permission updated successfully",
+                "share_id": existing_share.id,
+                "permission": existing_share.permission
+            }
 
         # Create share
         new_share = FileShare(

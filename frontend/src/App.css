@@ -547,6 +547,44 @@ select:focus {
 /* =========================================================
    BUTTONS
    ========================================================= */
+/* =========================================================
+   PRIMARY ACTION BUTTON
+   ========================================================= */
+
+.primary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 10px 16px;
+
+  border: 1px solid var(--primary);
+  border-radius: 9px;
+
+  background: var(--primary);
+  color: white;
+
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition: 0.2s ease;
+}
+
+.primary-button:hover {
+  transform: translateY(-1px);
+
+  background: var(--primary);
+  box-shadow: var(--shadow);
+}
+
+.primary-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
 
 .auth-button,
 .primary-action {
@@ -3691,4 +3729,212 @@ body.dark .activity-details small,
   align-items: center !important;
   justify-content: center !important;
   cursor: pointer !important;
+}
+/* =========================================================
+   AI SECURITY BUTTON
+   ========================================================= */
+
+.primary-button {
+  display: inline-flex;
+
+  align-items: center;
+  justify-content: center;
+
+  margin-top: 18px;
+
+  padding: 11px 18px;
+
+  border: none;
+  border-radius: 9px;
+
+  background: var(--primary);
+  color: white;
+
+  font-size: 12px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition: 0.2s ease;
+}
+
+.primary-button:hover {
+  transform: translateY(-1px);
+
+  box-shadow: var(--shadow);
+}
+
+.primary-button:disabled {
+  opacity: 0.6;
+
+  cursor: not-allowed;
+
+  transform: none;
+}
+/* =========================================================
+   AI SECURITY DESCRIPTION
+   ========================================================= */
+
+.ai-description {
+  margin: 8px 0 0;
+
+  color: var(--muted);
+
+  font-size: 13px;
+
+  line-height: 1.5;
+}
+/* =========================================================
+   AI SECURITY RESULT CARDS
+   ========================================================= */
+
+.ai-result-panel {
+  width: 100%;
+  box-sizing: border-box;
+}
+/* =========================================================
+   MOBILE SIDEBAR MENU
+   ========================================================= */
+
+/* Hidden on desktop */
+.mobile-menu-button,
+.mobile-menu-close {
+  display: none;
+}
+
+.mobile-menu-overlay {
+  display: none;
+}
+
+.mobile-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 750px) {
+
+  /* Mobile menu button */
+  .mobile-menu-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 42px;
+    height: 42px;
+
+    border: 1px solid var(--border);
+    border-radius: 10px;
+
+    background: var(--card);
+    color: var(--text);
+
+    font-size: 22px;
+    cursor: pointer;
+  }
+
+  .mobile-menu-button:hover {
+    background: var(--surface);
+  }
+
+
+  /* Hide normal sidebar on mobile */
+  .sidebar {
+    display: none !important;
+  }
+
+
+  /* Show sidebar when menu is opened */
+  .sidebar.mobile-sidebar-open {
+    display: flex !important;
+
+    position: fixed;
+    top: 0;
+    left: 0;
+
+    width: 280px;
+    height: 100vh;
+    min-height: 100vh;
+
+    z-index: 1001;
+
+    padding: 20px;
+
+    border-right: 1px solid var(--border);
+    border-bottom: none;
+
+    overflow-y: auto;
+
+    background: var(--background);
+  }
+
+
+  /* Show navigation inside opened mobile sidebar */
+  .sidebar.mobile-sidebar-open .nav-section,
+  .sidebar.mobile-sidebar-open .sidebar-bottom {
+    display: flex;
+  }
+
+  .sidebar.mobile-sidebar-open .nav-section {
+    flex-direction: column;
+  }
+
+
+  /* Close button inside mobile sidebar */
+  .mobile-menu-close {
+    display: flex;
+
+    align-items: center;
+    justify-content: center;
+
+    width: 36px;
+    height: 36px;
+
+    margin-left: auto;
+
+    border: 1px solid var(--border);
+    border-radius: 9px;
+
+    background: var(--card);
+    color: var(--text);
+
+    font-size: 24px;
+    line-height: 1;
+
+    cursor: pointer;
+  }
+
+
+  /* Mobile overlay */
+  .mobile-menu-overlay {
+    display: block;
+
+    position: fixed;
+    inset: 0;
+
+    background: rgba(0, 0, 0, 0.35);
+
+    z-index: 1000;
+  }
+
+
+  /* Keep mobile header usable */
+  .topbar {
+    padding: 0 16px;
+  }
+
+  .mobile-header-left {
+    min-width: 0;
+  }
+
+  .secure-label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }

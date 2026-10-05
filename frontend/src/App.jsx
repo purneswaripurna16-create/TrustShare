@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
 
-const API = "http://127.0.0.1:8000";
+const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 function AuthLayout({ children, theme, toggleTheme }) {
   return (
@@ -70,6 +70,7 @@ function App() {
   const [showPassword, setShowPassword] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const unreadNotifications = notifications.filter(
     (notification) => notification.is_read === false
@@ -79,6 +80,10 @@ function App() {
   const [securityStatus, setSecurityStatus] = useState(null);
   const [analytics, setAnalytics] = useState(null);
   const [reportFilter, setReportFilter] = useState("ALL");
+  const [aiAnalysis, setAiAnalysis] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiInsights, setAiInsights] = useState("");
+  const [aiInsightsLoading, setAiInsightsLoading] = useState(false);
 
   // =========================================================
   // FILE STATE
@@ -265,6 +270,140 @@ const loadActivities = async () => {
       error
     );
   }
+};
+// =========================================================
+// AI SECURITY ANALYSIS
+// =========================================================
+
+const runAiSecurityAnalysis = async () => {
+  try {
+    const token =
+      localStorage.getItem("access_token");
+
+    if (!token) return;
+
+    setAiLoading(true);
+    setAiAnalysis("");
+    setMessage("");
+
+    const response = await fetch(
+      `${API}/ai/security-analyze`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.detail || "AI security analysis failed"
+      );
+    }
+
+    setAiAnalysis(
+      data.analysis || "No analysis returned."
+    );
+
+  } catch (error) {
+    console.error(
+      "AI security analysis failed:",
+      error
+    );
+
+    setMessage(
+      error.message ||
+      "Failed to run AI security analysis."
+    );
+
+  } finally {
+    setAiLoading(false);
+  }
+};
+const runAiSecurityInsights = async () => {
+  try {
+    const token =
+      localStorage.getItem("access_token");
+
+    if (!token) return;
+
+    setAiInsightsLoading(true);
+    setAiInsights("");
+    setMessage("");
+
+    const response = await fetch(
+      `${API}/ai/security-insights`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.detail ||
+        "AI security insights failed"
+      );
+    }
+
+    setAiInsights(
+      data.insights ||
+      "No security insights returned."
+    );
+
+  } catch (error) {
+    console.error(
+      "AI security insights failed:",
+      error
+    );
+
+    setMessage(
+      error.message ||
+      "Failed to generate AI security insights."
+    );
+
+  } finally {
+    setAiInsightsLoading(false);
+  }
+};
+// =========================================================
+// AI SECURITY RESULT PARSER
+// =========================================================
+
+const getAiSection = (label) => {
+  if (!aiAnalysis) return "";
+
+  const pattern = new RegExp(
+    `${label}:\\s*([\\s\\S]*?)(?=\\n(?:Risk Level|Risk Score|Reason|Recommendation):|$)`,
+    "i"
+  );
+
+  const match = aiAnalysis.match(pattern);
+
+  return match
+    ? match[1].trim()
+    : "";
+};
+const getAiInsightSection = (label) => {
+  if (!aiInsights) return "";
+
+  const pattern = new RegExp(
+    `${label}:\\s*([\\s\\S]*?)(?=\\n(?:Security Summary|Activity Insights|Storage and File Usage|Suspicious Patterns|Recommendations):|$)`,
+    "i"
+  );
+
+  const match = aiInsights.match(pattern);
+
+  return match
+    ? match[1].trim()
+    : "";
 };
 // =========================================================
 // MILESTONE 3 - SECURITY MONITORING
@@ -554,6 +693,7 @@ const loadAnalytics = async () => {
           "access_token",
           data.access_token
         );
+        setUsername(data.username);
 
         setPassword("");
         setMessage("");
@@ -1805,94 +1945,130 @@ const handleCopyTemporaryLink = async () => {
   // SIDEBAR
   // =========================================================
 
-  const Sidebar = () => (
-    <aside className="sidebar">
-      <div className="brand">
-        <div className="brand-icon">
-          ✓
-        </div>
+    const Sidebar = () => (
+    <>
+      {/* Mobile menu overlay */}
+      {mobileMenuOpen && (
+        <div
+          className="mobile-menu-overlay"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
 
-        <div>
-          <div className="brand-name">
-            TrustShare
+      <aside
+        className={
+          mobileMenuOpen
+            ? "sidebar mobile-sidebar-open"
+            : "sidebar"
+        }
+      >
+        <div className="brand">
+          <div className="brand-icon">
+            ✓
           </div>
 
-          <div className="brand-tagline">
-            Secure file sharing
+          <div>
+            <div className="brand-name">
+              TrustShare
+            </div>
+
+            <div className="brand-tagline">
+              Secure file sharing
+            </div>
           </div>
+
+          {/* Mobile close button */}
+          <button
+            className="mobile-menu-close"
+            onClick={() => setMobileMenuOpen(false)}
+            aria-label="Close menu"
+          >
+            ×
+          </button>
         </div>
-      </div>
 
-      <div className="nav-section">
-        <span className="nav-title">
-          WORKSPACE
-        </span>
+        <div className="nav-section">
+          <span className="nav-title">
+            WORKSPACE
+          </span>
 
-        <button
-          className={
-            page === "dashboard"
-              ? "nav-item active"
-              : "nav-item"
-          }
-          onClick={() => {
-            setPage("dashboard");
-            setMessage("");
-          }}
-        >
-          <span>⌂</span>
-          Dashboard
-        </button>
+          <button
+            className={
+              page === "dashboard"
+                ? "nav-item active"
+                : "nav-item"
+            }
+            onClick={() => {
+              setPage("dashboard");
+              setMessage("");
+              setMobileMenuOpen(false);
+            }}
+          >
+            <span>⌂</span>
+            Dashboard
+          </button>
 
-        <button
-          className={
-            page === "files"
-              ? "nav-item active"
-              : "nav-item"
-          }
-          onClick={handleFiles}
-        >
-          <span>▣</span>
-          My Files
-        </button>
+          <button
+            className={
+              page === "files"
+                ? "nav-item active"
+                : "nav-item"
+            }
+            onClick={() => {
+              handleFiles();
+              setMobileMenuOpen(false);
+            }}
+          >
+            <span>▣</span>
+            My Files
+          </button>
 
-        <button
-          className={
-            page === "upload"
-              ? "nav-item active"
-              : "nav-item"
-          }
-          onClick={() => {
-            setPage("upload");
-            setMessage("");
-          }}
-        >
-          <span>↑</span>
-          Upload
-        </button>
+          <button
+            className={
+              page === "upload"
+                ? "nav-item active"
+                : "nav-item"
+            }
+            onClick={() => {
+              setPage("upload");
+              setMessage("");
+              setMobileMenuOpen(false);
+            }}
+          >
+            <span>↑</span>
+            Upload
+          </button>
 
-        <button
-          className={
-            page === "shared-files"
-              ? "nav-item active"
-              : "nav-item"
-          }
-          onClick={handleSharedFiles}
-        >
-          <span>⇄</span>
-          Shared With Me
-        </button>
+          <button
+            className={
+              page === "shared-files"
+                ? "nav-item active"
+                : "nav-item"
+            }
+            onClick={() => {
+              handleSharedFiles();
+              setMobileMenuOpen(false);
+            }}
+          >
+            <span>⇄</span>
+            Shared With Me
+          </button>
 
-        <button
-          className={
-            page === "shared-by-me"
-              ? "nav-item active"
-              : "nav-item"
-          }
-          onClick={handleSharedByMe}
-        >
-          <span>↗</span>
-          Shared By Me
-        </button>
+          <button
+            className={
+              page === "shared-by-me"
+                ? "nav-item active"
+                : "nav-item"
+            }
+            onClick={() => {
+              handleSharedByMe();
+              setMobileMenuOpen(false);
+            }}
+          >
+            <span>↗</span>
+            Shared By Me
+          </button>
+
           <button
             className={
               page === "activity"
@@ -1902,55 +2078,84 @@ const handleCopyTemporaryLink = async () => {
             onClick={() => {
               setPage("activity");
               setMessage("");
+              setMobileMenuOpen(false);
             }}
           >
             <span>◷</span>
             Activity
           </button>
-            <button
-              className={
-                page === "analytics"
-                  ? "nav-item active"
-                  : "nav-item"
-              }
-              onClick={() => {
-                setPage("analytics");
-                setMessage("");
-              }}
-            >
-              <span>▥</span>
-              Analytics
-            </button>
-      </div>
 
-      <div className="nav-section account-section">
-        <span className="nav-title">
-          ACCOUNT
-        </span>
+          <button
+            className={
+              page === "analytics"
+                ? "nav-item active"
+                : "nav-item"
+            }
+            onClick={() => {
+              setPage("analytics");
+              setMessage("");
+              setMobileMenuOpen(false);
+            }}
+          >
+            <span>▥</span>
+            Analytics
+          </button>
 
-        <button
-          className="nav-item"
-          onClick={() => {
-            setShowProfile(true);
-            handleMe();
-          }}
-        >
-          <span>◯</span>
-          My Account
-        </button>
-      </div>
+          <button
+            className={
+              page === "ai-security"
+                ? "nav-item active"
+                : "nav-item"
+            }
+            onClick={() => {
+              setPage("ai-security");
+              setMessage("");
+              setMobileMenuOpen(false);
+            }}
+          >
+            <span>🤖</span>
+            AI Security
+          </button>
+        </div>
 
-      <div className="sidebar-bottom">
-        <button
-          className="logout-button"
-          onClick={handleLogout}
-        >
-          <span>↪</span>
-          Logout
-        </button>
-      </div>
-    </aside>
+        <div className="nav-section account-section">
+          <span className="nav-title">
+            ACCOUNT
+          </span>
+
+          <button
+            className="nav-item"
+            onClick={() => {
+              setShowProfile(true);
+              handleMe();
+              setMobileMenuOpen(false);
+            }}
+          >
+            <span>◯</span>
+            My Account
+          </button>
+        </div>
+
+        <div className="sidebar-bottom">
+          <button
+            className="logout-button"
+            onClick={() => {
+              setMobileMenuOpen(false);
+              handleLogout();
+            }}
+          >
+            <span>↪</span>
+            Logout
+          </button>
+        </div>
+      </aside>
+    </>
   );
+
+
+      
+      
+
 
   // =========================================================
   // HEADER
@@ -1967,7 +2172,16 @@ const handleCopyTemporaryLink = async () => {
 
     return (
       <header className="topbar">
-        <div>
+        <div className="mobile-header-left">
+          <button
+            type="button"
+            className="mobile-menu-button"
+            onClick={() => setMobileMenuOpen(true)}
+            aria-label="Open menu"
+          >
+            ☰
+          </button>
+
           <span className="secure-label">
             SECURE WORKSPACE
           </span>
@@ -2322,7 +2536,10 @@ const handleCopyTemporaryLink = async () => {
           </span>
 
           <h1>
-            Welcome back 👋
+           
+            Welcome back {username || "User"} 👋
+
+            
           </h1>
 
           <p>
@@ -2951,6 +3168,343 @@ const handleCopyTemporaryLink = async () => {
         {page === "dashboard" && (
           <Dashboard />
         )}
+                {/* ===================================================
+            AI SECURITY
+            =================================================== */}
+                  {page === "ai-security" && (
+          <div className="content-page">
+
+            <div className="page-heading">
+              <div>
+                <span className="eyebrow">
+                  AI SECURITY
+                </span>
+
+                <h1>
+                  AI Security Analyzer
+                </h1>
+
+                <p>
+                  Analyze your recent TrustShare activity using local AI.
+                </p>
+              </div>
+            </div>
+
+            <div className="dashboard-grid">
+
+              <div className="panel">
+
+                <div className="panel-header">
+                  <h2>
+                    🤖 Security Analysis
+                  </h2>
+                </div>
+
+                <p className="ai-description">
+                  Run an AI-powered security analysis of your recent
+                  account and file activity.
+                </p>
+
+                <button
+                  className="primary-button"
+                  onClick={runAiSecurityAnalysis}
+                  disabled={aiLoading}
+                >
+                  {aiLoading
+                    ? "Analyzing..."
+                    : "Run Security Analysis"}
+                </button>
+                <button
+                  className="primary-button"
+                  onClick={runAiSecurityInsights}
+                  disabled={aiInsightsLoading}
+                  style={{ marginLeft: "10px" }}
+                >
+                  {aiInsightsLoading
+                    ? "Generating..."
+                    : "Generate Security Insights"}
+                </button>
+
+              </div>
+
+              <div className="security-card">
+
+                <div className="security-shield">
+                  ✓
+                </div>
+
+                <h2>
+                  AI Security Monitoring
+                </h2>
+
+                <p>
+                  Gemma 3 analyzes recent activity and identifies
+                  potentially suspicious security patterns.
+                </p>
+
+              </div>
+
+            </div>
+
+            {aiAnalysis && (
+              <div
+                className="panel ai-result-panel"
+                style={{ marginTop: "18px" }}
+              >
+                
+
+                <div className="panel-header">
+                  <h2>
+                    🤖 AI Security Assessment
+                  </h2>
+                </div>
+
+                                <div
+                  className="stats-grid"
+                  style={{ marginTop: "18px" }}
+                >
+
+                  <div className="stat-card">
+                    <div className="stat-icon">
+                      !
+                    </div>
+
+                    <div>
+                      <span>Risk Level</span>
+                      <strong>
+                        {getAiSection("Risk Level")}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <div className="stat-card">
+                    <div className="stat-icon">
+                      #
+                    </div>
+
+                    <div>
+                      <span>Risk Score</span>
+                      <strong>
+                        {getAiSection("Risk Score")}
+                        <small>/100</small>
+                      </strong>
+                    </div>
+                  </div>
+
+                </div>
+
+                <div style={{ marginTop: "20px" }}>
+
+                  <span
+                    style={{
+                      display: "block",
+                      color: "var(--text)",
+                      fontSize: "11px",
+                      fontWeight: "900",
+                      marginBottom: "6px",
+                    }}
+                  >
+                    REASON
+                  </span>
+
+                  <p
+                    style={{
+                      margin: 0,
+                      color: "var(--muted)",
+                      fontSize: "13px",
+                      lineHeight: "1.7",
+                    }}
+                  >
+                    {getAiSection("Reason")}
+                  </p>
+
+                </div>
+
+                <div style={{ marginTop: "20px" }}>
+
+                  <span
+                    style={{
+                      display: "block",
+                      color: "var(--text)",
+                      fontSize: "11px",
+                      fontWeight: "900",
+                      marginBottom: "6px",
+                    }}
+                  >
+                    RECOMMENDATION
+                  </span>
+
+                  <p
+                    style={{
+                      margin: 0,
+                      color: "var(--text)",
+                      fontSize: "13px",
+                      lineHeight: "1.7",
+                    }}
+                  >
+                    {getAiSection("Recommendation")}
+                  </p>
+
+                </div>
+
+              </div>
+            )}
+            {aiInsights && (
+  <div
+    className="panel ai-result-panel"
+    style={{ marginTop: "18px" }}
+  >
+
+    <div className="panel-header">
+      <h2>
+        📊 AI Security Insights
+      </h2>
+    </div>
+
+    <div style={{ marginTop: "20px" }}>
+
+      <span
+        style={{
+          display: "block",
+          color: "var(--text)",
+          fontSize: "11px",
+          fontWeight: "900",
+          marginBottom: "6px",
+        }}
+      >
+        SECURITY SUMMARY
+      </span>
+
+      <p
+        style={{
+          margin: 0,
+          color: "var(--text)",
+          fontSize: "13px",
+          lineHeight: "1.7",
+        }}
+      >
+        {getAiInsightSection("Security Summary")}
+      </p>
+
+    </div>
+
+    <div style={{ marginTop: "20px" }}>
+
+      <span
+        style={{
+          display: "block",
+          color: "var(--text)",
+          fontSize: "11px",
+          fontWeight: "900",
+          marginBottom: "6px",
+        }}
+      >
+        ACTIVITY INSIGHTS
+      </span>
+
+      <p
+        style={{
+          margin: 0,
+          color: "var(--text)",
+          fontSize: "13px",
+          lineHeight: "1.7",
+        }}
+      >
+        {getAiInsightSection("Activity Insights")}
+      </p>
+
+    </div>
+
+    <div style={{ marginTop: "20px" }}>
+
+      <span
+        style={{
+          display: "block",
+          color: "var(--text)",
+          fontSize: "11px",
+          fontWeight: "900",
+          marginBottom: "6px",
+        }}
+      >
+        STORAGE AND FILE USAGE
+      </span>
+
+      <p
+        style={{
+          margin: 0,
+          color: "var(--text)",
+          fontSize: "13px",
+          lineHeight: "1.7",
+        }}
+      >
+        {getAiInsightSection("Storage and File Usage")}
+      </p>
+
+    </div>
+
+    <div style={{ marginTop: "20px" }}>
+
+      <span
+        style={{
+          display: "block",
+          color: "var(--text)",
+          fontSize: "11px",
+          fontWeight: "900",
+          marginBottom: "6px",
+        }}
+      >
+        SUSPICIOUS PATTERNS
+      </span>
+
+      <p
+        style={{
+          margin: 0,
+          color: "var(--text)",
+          fontSize: "13px",
+          lineHeight: "1.7",
+        }}
+      >
+        {getAiInsightSection("Suspicious Patterns")}
+      </p>
+
+    </div>
+
+    <div style={{ marginTop: "20px" }}>
+
+      <span
+        style={{
+          display: "block",
+          color: "var(--text)",
+          fontSize: "11px",
+          fontWeight: "900",
+          marginBottom: "6px",
+        }}
+      >
+        RECOMMENDATIONS
+      </span>
+
+      <p
+        style={{
+          margin: 0,
+          color: "var(--text)",
+          fontSize: "13px",
+          lineHeight: "1.7",
+        }}
+      >
+        {getAiInsightSection("Recommendations")}
+      </p>
+
+    </div>
+
+  </div>
+)}
+
+          </div>
+        )}
+        
+        
+
+            
         {/* ===================================================
     ACTIVITY / AUDIT LOG
     =================================================== */}

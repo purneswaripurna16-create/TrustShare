@@ -1143,88 +1143,82 @@ const loadAnalytics = async () => {
   // DOWNLOAD
   // =========================================================
 
-  const handleDownload = async (
-    filename
-  ) => {
-    if (!token) {
-      setPage("login");
+  const handleDownload = async (filename) => {
+  if (!token) {
+    setPage("login");
+    return;
+  }
+
+  setMessage("");
+
+  try {
+    const response = await fetch(
+      `${API}/download/${encodeURIComponent(filename)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      let errorMessage = "Unable to download this file.";
+
+      try {
+        const data = await response.json();
+
+        errorMessage =
+          data.detail ||
+          errorMessage;
+      } catch {
+        // Ignore JSON parsing error
+      }
+
+      setMessage(errorMessage);
       return;
     }
 
-    setMessage("");
+    const blob = await response.blob();
 
-    try {
-      const response = await fetch(
-        `${API}/download/${encodeURIComponent(
-          filename
-        )}`,
-        {
-          headers: {
-            Authorization:
-              `Bearer ${token}`,
-          },
-        }
-      );
+    const url = window.URL.createObjectURL(blob);
 
-      if (!response.ok) {
-        let errorMessage =
-          "Unable to download this file.";
+    // Create download link
+    const link = document.createElement("a");
 
-        try {
-          const data =
-            await response.json();
+    link.href = url;
+    link.download = filename;
+    link.style.display = "none";
 
-          errorMessage =
-            data.detail ||
-            errorMessage;
-        } catch {
-          // Ignore JSON parsing error
-        }
+    document.body.appendChild(link);
 
-        setMessage(errorMessage);
-
-        return;
-      }
-
-      const blob =
-        await response.blob();
-
-      const url =
-        window.URL.createObjectURL(
-          blob
-        );
-
-      const link =
-        document.createElement("a");
-
-      link.href = url;
-      link.download = filename;
-
-      document.body.appendChild(
-        link
-      );
-
+    // Check whether browser supports the download attribute
+    if ("download" in link) {
       link.click();
-
-      document.body.removeChild(
-        link
-      );
-
-      window.URL.revokeObjectURL(
-        url
-      );
-
-      setMessage(
-        `"${filename}" downloaded successfully.`
-      );
-    } catch (error) {
-      console.error(error);
-
-      setMessage(
-        "Unable to download the file."
-      );
+    } else {
+      // Mobile browsers that don't support download attribute
+      window.open(url, "_blank");
     }
-  };
+
+    document.body.removeChild(link);
+
+    // Give the browser time to use the Blob URL
+    setTimeout(() => {
+      window.URL.revokeObjectURL(url);
+    }, 1000);
+
+    setMessage(
+      `"${filename}" downloaded successfully.`
+    );
+  } catch (error) {
+    console.error(error);
+
+    setMessage(
+      "Unable to download the file."
+    );
+  }
+};
+
+      
   // =========================================================
 // UPDATE SHARED FILE
 // =========================================================

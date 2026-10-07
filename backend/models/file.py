@@ -4,6 +4,7 @@ from database.connection import Base
 
 class File(Base):
     __tablename__ = "files"
+    __table_args__ = {"schema": "public"}
 
     id = Column(Integer, primary_key=True, index=True)
 

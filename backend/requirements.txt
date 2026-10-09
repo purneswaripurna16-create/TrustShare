@@ -64,3 +64,4 @@ yarl==1.24.5
 pyotp==2.10.0
 qrcode==8.2
 Pillow==11.3.0
+requests

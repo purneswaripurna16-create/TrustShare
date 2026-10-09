@@ -92,9 +92,9 @@ function App() {
   const [securityStatus, setSecurityStatus] = useState(null);
   const [analytics, setAnalytics] = useState(null);
   const [reportFilter, setReportFilter] = useState("ALL");
-  const [aiAnalysis, setAiAnalysis] = useState("");
+  const [aiAnalysis, setAiAnalysis] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
-  const [aiInsights, setAiInsights] = useState("");
+  const [aiInsights, setAiInsights] = useState(null);
   const [aiInsightsLoading, setAiInsightsLoading] = useState(false);
 
   // =========================================================
@@ -287,26 +287,26 @@ const loadActivities = async () => {
 // AI SECURITY ANALYSIS
 // =========================================================
 
+
 const runAiSecurityAnalysis = async () => {
   try {
-    const token =
-      localStorage.getItem("access_token");
+    const token = localStorage.getItem("access_token");
 
-    if (!token) return;
+    if (!token) {
+      setMessage("Please log in to continue.");
+      return;
+    }
 
     setAiLoading(true);
-    setAiAnalysis("");
+    setAiAnalysis(null);
     setMessage("");
 
-    const response = await fetch(
-      `${API}/ai/security-analyze`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
+    const response = await fetch(`${API}/ai/security-analyze`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
 
     const data = await response.json();
 
@@ -316,107 +316,116 @@ const runAiSecurityAnalysis = async () => {
       );
     }
 
-    setAiAnalysis(
-      data.analysis || "No analysis returned."
-    );
-
+    setAiAnalysis(data.analysis || null);
   } catch (error) {
-    console.error(
-      "AI security analysis failed:",
-      error
-    );
-
+    console.error("AI security analysis failed:", error);
     setMessage(
-      error.message ||
-      "Failed to run AI security analysis."
+      error.message || "Failed to run AI security analysis."
     );
-
   } finally {
     setAiLoading(false);
   }
 };
+
 const runAiSecurityInsights = async () => {
   try {
-    const token =
-      localStorage.getItem("access_token");
+    const token = localStorage.getItem("access_token");
 
-    if (!token) return;
+    if (!token) {
+      setMessage("Please log in to continue.");
+      return;
+    }
 
     setAiInsightsLoading(true);
-    setAiInsights("");
+    setAiInsights(null);
     setMessage("");
 
-    const response = await fetch(
-      `${API}/ai/security-insights`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
+    const response = await fetch(`${API}/ai/security-insights`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
 
     const data = await response.json();
 
+    console.log("Full AI Insights API response:", data);
+    console.log("Insights object:", data.insights);
+
     if (!response.ok) {
-      throw new Error(
-        data.detail ||
-        "AI security insights failed"
-      );
+      throw new Error(data.detail || "AI security insights failed");
     }
 
-    setAiInsights(
-      data.insights ||
-      "No security insights returned."
-    );
-
+    setAiInsights(data.insights || null);
   } catch (error) {
-    console.error(
-      "AI security insights failed:",
-      error
-    );
-
+    console.error("AI security insights failed:", error);
     setMessage(
-      error.message ||
-      "Failed to generate AI security insights."
+      error.message || "Failed to generate AI security insights."
     );
-
   } finally {
     setAiInsightsLoading(false);
   }
 };
+
+
+
+
 // =========================================================
 // AI SECURITY RESULT PARSER
 // =========================================================
 
+
 const getAiSection = (label) => {
-  if (!aiAnalysis) return "";
+  if (!aiAnalysis || typeof aiAnalysis !== "object") {
+    return "Not available";
+  }
 
-  const pattern = new RegExp(
-    `${label}:\\s*([\\s\\S]*?)(?=\\n(?:Risk Level|Risk Score|Reason|Recommendation):|$)`,
-    "i"
-  );
+  const key = label.trim().toLowerCase();
 
-  const match = aiAnalysis.match(pattern);
+  const fieldMap = {
+    "risk level": "risk_level",
+    "risk score": "risk_score",
+    reason: "reason",
+    recommendation: "recommendations",
+    recommendations: "recommendations",
+  };
 
-  return match
-    ? match[1].trim()
-    : "";
+  const field = fieldMap[key];
+
+  if (!field || aiAnalysis[field] == null) {
+    return "Not available";
+  }
+
+  const value = aiAnalysis[field];
+
+  if (Array.isArray(value)) {
+    return value
+      .map((item, index) => `${index + 1}. ${item}`)
+      .join("\n");
+  }
+
+  return String(value);
 };
-const getAiInsightSection = (label) => {
-  if (!aiInsights) return "";
 
-  const pattern = new RegExp(
-    `${label}:\\s*([\\s\\S]*?)(?=\\n(?:Security Summary|Activity Insights|Storage and File Usage|Suspicious Patterns|Recommendations):|$)`,
-    "i"
-  );
 
-  const match = aiInsights.match(pattern);
+const getAiInsightSection = (key) => {
+  if (!aiInsights || typeof aiInsights !== "object") {
+    return "Not available";
+  }
 
-  return match
-    ? match[1].trim()
-    : "";
+  const value = aiInsights[key];
+
+  if (value == null || value === "") {
+    return "Not available";
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item, index) => `${index + 1}. ${item}`).join("\n");
+  }
+
+  return String(value);
 };
+
 // =========================================================
 // MILESTONE 3 - SECURITY MONITORING
 // =========================================================
@@ -4166,8 +4175,8 @@ if (page === "mfa-setup") {
                 </h2>
 
                 <p>
-                  Gemma 3 analyzes recent activity and identifies
-                  potentially suspicious security patterns.
+                  Ollama AI analyzes recent TrustShare activity and highlights potentially suspicious patterns based on recorded evidence.
+
                 </p>
 
               </div>
@@ -4175,108 +4184,208 @@ if (page === "mfa-setup") {
             </div>
 
             {aiAnalysis && (
-              <div
-                className="panel ai-result-panel"
-                style={{ marginTop: "18px" }}
-              >
+  <div
+    className="panel ai-result-panel"
+    style={{ marginTop: "18px" }}
+  >
 
+    <div className="panel-header">
+      <h2>
+        🤖 AI Security Assessment
+      </h2>
+    </div>
 
-                <div className="panel-header">
-                  <h2>
-                    🤖 AI Security Assessment
-                  </h2>
-                </div>
+    {/* Risk Cards */}
+    <div
+      className="stats-grid"
+      style={{ marginTop: "18px" }}
+    >
 
-                                <div
-                  className="stats-grid"
-                  style={{ marginTop: "18px" }}
-                >
+      {/* Risk Level */}
+      <div className="stat-card">
+        <div
+          className="stat-icon"
+          style={{
+            background:
+              getAiSection("Risk Level")
+                .toUpperCase()
+                .includes("CRITICAL")
+                ? "rgba(239, 68, 68, 0.15)"
+                : getAiSection("Risk Level")
+                    .toUpperCase()
+                    .includes("HIGH")
+                ? "rgba(249, 115, 22, 0.15)"
+                : getAiSection("Risk Level")
+                    .toUpperCase()
+                    .includes("MEDIUM")
+                ? "rgba(245, 158, 11, 0.15)"
+                : "rgba(34, 197, 94, 0.15)",
+            color:
+              getAiSection("Risk Level")
+                .toUpperCase()
+                .includes("CRITICAL")
+                ? "#ef4444"
+                : getAiSection("Risk Level")
+                    .toUpperCase()
+                    .includes("HIGH")
+                ? "#f97316"
+                : getAiSection("Risk Level")
+                    .toUpperCase()
+                    .includes("MEDIUM")
+                ? "#f59e0b"
+                : "#22c55e",
+          }}
+        >
+          !
+        </div>
 
-                  <div className="stat-card">
-                    <div className="stat-icon">
-                      !
-                    </div>
+        <div>
+          <span>Risk Level</span>
 
-                    <div>
-                      <span>Risk Level</span>
-                      <strong>
-                        {getAiSection("Risk Level")}
-                      </strong>
-                    </div>
-                  </div>
+          <strong
+            style={{
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+            }}
+          >
+            {getAiSection("Risk Level")}
+          </strong>
+        </div>
+      </div>
 
-                  <div className="stat-card">
-                    <div className="stat-icon">
-                      #
-                    </div>
+      {/* Risk Score */}
+      <div className="stat-card">
 
-                    <div>
-                      <span>Risk Score</span>
-                      <strong>
-                        {getAiSection("Risk Score")}
-                        <small>/100</small>
-                      </strong>
-                    </div>
-                  </div>
+        <div className="stat-icon">
+          #
+        </div>
 
-                </div>
+        <div>
+          <span>Risk Score</span>
 
-                <div style={{ marginTop: "20px" }}>
+          <strong>
+            {getAiSection("Risk Score")
+              .replace(/\/100/g, "")
+              .trim()}
 
-                  <span
-                    style={{
-                      display: "block",
-                      color: "var(--text)",
-                      fontSize: "11px",
-                      fontWeight: "900",
-                      marginBottom: "6px",
-                    }}
-                  >
-                    REASON
-                  </span>
+            <small>/100</small>
+          </strong>
+        </div>
 
-                  <p
-                    style={{
-                      margin: 0,
-                      color: "var(--muted)",
-                      fontSize: "13px",
-                      lineHeight: "1.7",
-                    }}
-                  >
-                    {getAiSection("Reason")}
-                  </p>
+      </div>
 
-                </div>
+    </div>
 
-                <div style={{ marginTop: "20px" }}>
+    {/* Reason */}
+    <div
+      style={{
+        marginTop: "22px",
+        padding: "16px",
+        borderRadius: "12px",
+        background: "var(--card)",
+        border: "1px solid var(--border)",
+      }}
+    >
 
-                  <span
-                    style={{
-                      display: "block",
-                      color: "var(--text)",
-                      fontSize: "11px",
-                      fontWeight: "900",
-                      marginBottom: "6px",
-                    }}
-                  >
-                    RECOMMENDATION
-                  </span>
+      <span
+        style={{
+          display: "block",
+          color: "var(--text)",
+          fontSize: "11px",
+          fontWeight: "900",
+          marginBottom: "8px",
+          letterSpacing: "0.6px",
+        }}
+      >
+        REASON
+      </span>
 
-                  <p
-                    style={{
-                      margin: 0,
-                      color: "var(--text)",
-                      fontSize: "13px",
-                      lineHeight: "1.7",
-                    }}
-                  >
-                    {getAiSection("Recommendation")}
-                  </p>
+      <p
+  style={{
+    margin: 0,
+    color: "var(--muted)",
+    fontSize: "13px",
+    lineHeight: "1.8",
+  }}
+>
+  {getAiSection("Reason")
+    .replace(/\\\./g, ".")
+    .replace(/\s+/g, " ")
+    .trim()}
+</p>
 
-                </div>
+    </div>
 
-              </div>
-            )}
+    {/* Recommendation */}
+    <div
+      style={{
+        marginTop: "14px",
+        padding: "16px",
+        borderRadius: "12px",
+        background: "var(--card)",
+        border: "1px solid var(--border)",
+      }}
+    >
+
+      <span
+        style={{
+          display: "block",
+          color: "var(--text)",
+          fontSize: "11px",
+          fontWeight: "900",
+          marginBottom: "8px",
+          letterSpacing: "0.6px",
+        }}
+      >
+        RECOMMENDATION
+      </span>
+
+      <div
+  style={{
+    color: "var(--text)",
+    fontSize: "13px",
+    lineHeight: "1.8",
+  }}
+>
+  {getAiSection("Recommendation")
+    .replace(/\\\./g, ".")
+    .split(/\s(?=\d+\.\s)/)
+    .map((item, index) => {
+      const cleaned = item.trim();
+
+      return (
+        <div
+          key={index}
+          style={{
+            marginBottom: "10px",
+            display: "flex",
+            gap: "10px",
+          }}
+        >
+          <span
+            style={{
+              fontWeight: "800",
+              minWidth: "22px",
+            }}
+          >
+            {index + 1}.
+          </span>
+
+          <span>
+            {cleaned.replace(/^\d+\.\s*/, "")}
+          </span>
+        </div>
+      );
+    })}
+</div>
+
+    </div>
+
+  </div>
+)}
+              
+                    
+                  
             {aiInsights && (
   <div
     className="panel ai-result-panel"
@@ -4311,7 +4420,7 @@ if (page === "mfa-setup") {
           lineHeight: "1.7",
         }}
       >
-        {getAiInsightSection("Security Summary")}
+        {getAiInsightSection("security_summary")}
       </p>
 
     </div>
@@ -4338,7 +4447,7 @@ if (page === "mfa-setup") {
           lineHeight: "1.7",
         }}
       >
-        {getAiInsightSection("Activity Insights")}
+        {getAiInsightSection("activity_insights")}
       </p>
 
     </div>
@@ -4365,7 +4474,7 @@ if (page === "mfa-setup") {
           lineHeight: "1.7",
         }}
       >
-        {getAiInsightSection("Storage and File Usage")}
+        {getAiInsightSection("storage_and_file_usage")}
       </p>
 
     </div>
@@ -4392,7 +4501,7 @@ if (page === "mfa-setup") {
           lineHeight: "1.7",
         }}
       >
-        {getAiInsightSection("Suspicious Patterns")}
+        {getAiInsightSection("suspicious_patterns")}
       </p>
 
     </div>
@@ -4419,7 +4528,7 @@ if (page === "mfa-setup") {
           lineHeight: "1.7",
         }}
       >
-        {getAiInsightSection("Recommendations")}
+        {getAiInsightSection("recommendations")}
       </p>
 
     </div>
